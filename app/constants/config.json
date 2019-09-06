@@ -1,0 +1,61 @@
+{
+    "ops.infra.lectio.cc" : {
+        "natureOfInstance": "Instance",
+        "extensionUI" : {
+            "displayName": "Netspective Lectio"            
+        },
+        "api" : {
+            "baseURL": "https://ops.infra.lectio.cc/api/v3"
+        },
+        "projects" : {
+            "include" : [
+                { "name": ".*" }
+            ],
+            "exclude" : [],
+            "default" : "",
+            "dynamicConfig" : {
+                "projectWikiPageContent": "Netspective Lectio Browser Extension Project Configuration"
+            }
+        }
+    },
+    "plan.netspective.com" : {
+        "natureOfInstance": "Instance", 
+        "extensionUI" : {
+            "displayName": "Netspective Projects"            
+        },
+        "api" : {
+            "baseURL": "https://openproject.netspective.com/api/v3"
+        },
+        "projects" : {
+            "include" : [
+                { "name": ".*" }
+            ],
+            "exclude" : [],
+            "default" : "",
+            "commonConfig" : {
+                "extensionUI" : {
+                    "displayName" : "${context.projectName}"
+                },
+                "campaigns": [
+                    {
+                        "instanceName" : "${context.instanceName}",
+                        "projectName" : "${context.projectName}",
+                        "workPackages" : {
+                            "hierarchy": ["Objective", "Key Result", "Epic", "..."]
+                        },
+                        "include" : [
+                            { "name": ".*" }
+                        ],
+                        "exclude" : [],
+                        "default" : "",
+                        "contentStore" : {
+                            "instanceName" : "${context.instanceName}",
+                            "projectName" : "${context.projectName}",
+                            "workPackage" : "Knowledge"
+                        }
+                    }
+                ]
+            }            
+        }
+    }
+}
