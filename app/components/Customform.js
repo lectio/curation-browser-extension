@@ -2,7 +2,7 @@ import React, { Component } from 'react';
 import style from './CustomForm.css';
 import ExtractedContent from './ExtractedContent';
 import { Tabs, TabPanel } from '@cmsgov/design-system-core';
-import * as config  from '../constants/config.json';
+import * as config from '../constants/config.json';
 import * as APIDATA from '../constants/apidata';
 import Cookies from 'js-cookie';
 // import apiData, { APIDATA.Base_Url } from '../constants/apidata';
@@ -55,7 +55,10 @@ export default class Customform extends Component {
       isLogin: true,
       metaDataJSON: '',
       loader: false,
-      fetchingContents: true
+      fetchingContents: true,
+      apiKey:'',
+      messageApiKey:'',
+      messageApiKeyErr:''
     };
     this.handleChange = this.handleChange.bind(this);
     this.handleValidate = this.handleValidate.bind(this);
@@ -63,8 +66,13 @@ export default class Customform extends Component {
     this.handleSummary = this.handleSummary.bind(this);
     this.activateTabs = this.activateTabs.bind(this);
     this.getCookies = this.getCookies.bind(this);
+    this.saveSetting = this.saveSetting.bind(this);
+    this.updateAPiKeyState = this.updateAPiKeyState.bind(this);
   }
   componentDidMount() {
+    var key = 'apiKey';
+    chrome.storage.local.get(key, this.updateAPiKeyState);
+
     let selectedContent = '';
     chrome.tabs.executeScript({
       code: 'window.getSelection().toString();'
@@ -74,24 +82,7 @@ export default class Customform extends Component {
       }
     });
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-      const data = {
-        method: 'GET',
-        headers: {
-          Authorization: 'Basic ' + btoa(APIDATA.API_KEY),
-          'Content-Type': 'application/json;charset=UTF-8',
-        }
-      };
-      fetch(APIDATA.BASE_URL + '/projects/' + APIDATA.PROJECT_ID + '/work_packages/', data)
-        .then((results) => {
-          return results.json();
-        }).then((catdata) => {
-          const catTmp = catdata._embedded.elements;
-          const categoryFromApi = catTmp.map(cat => { return { value: cat.id, display: cat.subject } });
-          const multi = catTmp.map(cat => { return { value: cat.id, label: cat.subject } });
-          this.setState({ categories: [{ value: '', display: '(Select Category)' }].concat(categoryFromApi) });
-          this.setState({ multiSelect: multi });
-        });
-
+     
       const url = tabs[0].url;
       this.setState({ url: url });
       const x = new XMLHttpRequest();
@@ -109,7 +100,7 @@ export default class Customform extends Component {
           ogData.push({ 'name': og[i].attributes.property.nodeValue, content: og[i].attributes.content.nodeValue });
         }
         this.setState({ ogData: ogData });
-        
+
         const metaDataOb = [];
         const meta = doc.getElementsByTagName('meta');
         let j = 0;
@@ -159,6 +150,33 @@ export default class Customform extends Component {
       x.send(null);
     }.bind(this));
   }
+  updateAPiKeyState(val){
+    if(val['apiKey'] == ''){
+      this.setState({showEdit : false});
+      this.setState({showSettings : true});
+    }
+
+    const authdata = {
+      method: 'GET',
+      headers: {
+        'Authorization': 'Basic ' + btoa('apikey:'+val['apiKey']),  
+      }
+    };
+
+    fetch(APIDATA.BASE_URL + '/my_preferences/', authdata)
+    .then(response => {
+      if (response.status === 200) {
+        
+        this.setState({ apiKey: val['apiKey'] });
+      }else{
+        this.setState({showEdit : false});
+        this.setState({showSettings : true});
+        
+      }
+      return response.json();
+    })
+
+  }
   handleChange(event) {
     this.setState({ value: event.target.value });
   }
@@ -168,7 +186,41 @@ export default class Customform extends Component {
   handleSummary(event) {
     this.setState({ summary: event.target.value });
   }
+  handleApikey = e => {
+    this.setState({ apiKey: e.target.value });
+   
+  }
+  saveSetting(event){
+    event.preventDefault();
 
+    const authdata = {
+      method: 'GET',
+      headers: {
+        'Authorization': 'Basic ' + btoa('apikey:'+this.state.apiKey),  
+      }
+    };
+    console.log(authdata);
+    console.log('apikey',this.state.apiKey);
+    fetch(APIDATA.BASE_URL + '/my_preferences/', authdata)
+    .then(response => {
+      if (response.status === 200) {
+        var obj = {};       
+        var key = "apiKey";  
+        obj[key] = this.state.apiKey;   
+        chrome.storage.local.set(obj);
+        this.setState({ messageApiKey: 'ApiKey Saved Successfully.' });
+      }else{
+        this.setState({ messageApiKeyErr: 'Invalid API Key.' });
+        
+      }
+      return response.json();
+    });
+ 
+
+
+    
+
+  }
   togglePopup() {
     this.setState({
       showPopup: !this.state.showPopup
@@ -216,7 +268,7 @@ export default class Customform extends Component {
       method: 'POST',
       body: params,
       headers: {
-        Authorization: 'Basic ' + btoa(APIDATA.API_KEY),
+        Authorization: 'Basic ' + btoa('apikey:'+this.state.apiKey),
         'Content-Type': 'application/json;charset=UTF-8',
       }
     };
@@ -284,9 +336,7 @@ export default class Customform extends Component {
   }
 
   generateCleanURL(url) {
-    let thisLink = this.stripQsVarMatch('news.google.com', url, 'url');
-    thisLink = this.stripQsVarMatch('bing.com', url, 'tid');
-    thisLink = this.removeUrlParameters('bing.com', url, 'tid');
+    const thisLink = url.replace(/(\?)utm[^&]*(?:&utm[^&]*)*&(?=(?!utm[^\s&=]*=)[^\s&=]+=)|\?utm[^&]*(?:&utm[^&]*)*$|&utm[^&]*/gi, '$1');
     return thisLink;
   }
 
@@ -314,7 +364,7 @@ export default class Customform extends Component {
       method: 'POST',
       body: formBody,
       headers: {
-        'Authorization': 'Basic ' + btoa(APIDATA.API_KEY),
+        'Authorization': 'Basic ' + btoa('apikey:'+this.state.apiKey),
       }
     };
     fetch(APIDATA.BASE_URL + '/work_packages/' + id + '/attachments', authdata);
@@ -331,7 +381,7 @@ export default class Customform extends Component {
       method: 'POST',
       body: formBody,
       headers: {
-        'Authorization': 'Basic ' + btoa(APIDATA.API_KEY),
+        'Authorization': 'Basic ' + btoa('apikey:'+this.state.apiKey),
       }
     };
     fetch(APIDATA.BASE_URL + '/work_packages/' + id + '/attachments', authdata);
@@ -348,7 +398,7 @@ export default class Customform extends Component {
       method: 'POST',
       body: formBody,
       headers: {
-        'Authorization': 'Basic ' + btoa(APIDATA.API_KEY),
+        'Authorization': 'Basic ' + btoa('apikey:'+this.state.apiKey),
       }
     };
     fetch(APIDATA.BASE_URL + '/work_packages/' + id + '/attachments', authdata);
@@ -406,92 +456,123 @@ export default class Customform extends Component {
     return (
       <section>
         {this.state.isLogin ? <div className="ds-l-container">
-
           <div className="ds-l-row">
             <div className="ds-u-padding--0 ds-l-col--11">
-              <div>
-                {this.state.showEdit ?
-                  <div id="panel-edit">
-                    <form onSubmit={this.handleSubmit}>
-                      <p><label>
-                        <textarea className={[style.textareaTitle, 'preview__label ds-u-font-size--h4 ds-u-font-style--normal'].join(' ')} value={this.state.value} onChange={this.handleChange} />
-                      </label></p>
-                      <hr />
-                      {this.state.fetchingContents ? <p className="ds-u-text-align--center">
-                        <button className="ds-c-button">
-                          <span className="ds-c-spinner ds-c-spinner--small" aria-valuetext="Fetching Contents" role="progressbar"></span> Fetching Contents
+              {this.state.showEdit ?
+                <div id="panel-edit">
+                  <form onSubmit={this.handleSubmit}>
+                    <p>
+                      <textarea className={[style.textareaTitle, 'preview__label ds-u-font-size--h4 ds-u-font-style--normal'].join(' ')} value={this.state.value} onChange={this.handleChange} />
+                    </p>
+                    <hr className="on ds-u-fill--gray-lightest" />
+                    {this.state.fetchingContents ? <p className="ds-u-text-align--center">
+                      <button className="ds-c-button">
+                        <span className="ds-c-spinner ds-c-spinner--small" aria-valuetext="Fetching Contents" role="progressbar"></span> Fetching Contents
                         </button>
-                      </p> : null}
-                      <p><label>
-                        <textarea className={[style.textareaDesc, 'preview__label ds-u-font-size--small ds-u-font-style--normal'].join(' ')} value={this.state.summary} onChange={this.handleSummary} />
-                      </label></p>
-                      {this.state.image.length > 0 &&
-                        <p>
-                          <img id="imgTab" onClick={this.activateTabs} src={this.state.image} className={style.ogImages} alt="Og Image"></img>
-                        </p>
-                      }
-                      <p><label>
-                        <textarea className={[style.textareaLink, 'preview__label ds-u-font-style--normal'].join(' ')} value={this.generateCleanURL(this.state.url)} onChange={this.handleUrl} />
-                      </label></p>
-                      <hr />
-                      <div className={style.sucessBlock}>
-                        {this.state.loader ? <button className="ds-u-margin--2 ds-c-button ds-c-button--primary">
-                          <span className="ds-c-spinner ds-c-spinner--small ds-c-spinner--inverse" aria-valuetext="Saving" role="progressbar"></span> Saving
+                    </p> : null}
+                    <p><label>
+                      <textarea className={[style.textareaDesc, 'preview__label ds-u-font-size--small ds-u-font-style--normal'].join(' ')} value={this.state.summary} onChange={this.handleSummary} />
+                    </label></p>
+                    {this.state.image.length > 0 &&
+                      <p>
+                        <img id="imgTab" onClick={this.activateTabs} src={this.state.image} className={style.ogImages} alt="Og Image"></img>
+                      </p>
+                    }
+                    <hr className="on ds-u-fill--gray-lightest" />
+                    <p className="ds-u-margin--0"><label>
+                      <input type="text" className={[style.textareaLink, 'preview__label ds-u-font-style--normal'].join(' ')} value={this.generateCleanURL(this.state.url)} onChange={this.handleUrl} />
+                    </label></p>
+                    <hr className="on ds-u-fill--gray-lightest" />
+                    <div className={style.sucessBlock}>
+                      {this.state.loader ? <button className="ds-u-margin--0 ds-c-button ds-c-button--primary">
+                        <span className="ds-c-spinner ds-c-spinner--small ds-c-spinner--inverse" aria-valuetext="Saving" role="progressbar"></span> Saving
                         </button> : null}
-                        {this.state.message == '' && this.state.loader == false ? <input type="submit" value="Post to Lectio" className="ds-u-margin--2 ds-c-button ds-c-button--primary" /> : null}
-                        {this.state.message != '' ?
-                          <div className="ds-c-alert ds-c-alert--success">
-                            <div className="ds-c-alert__body">
-                              <p className="ds-c-alert__text">{this.state.message} <a target="_blank" href={this.state.siteUrl + this.state.taskId}>{this.state.taskId ? "#" + this.state.taskId : null}</a></p>
-                            </div>
-                          </div> : null}
-                      </div>
-                    </form>
+                      {this.state.message == '' && this.state.loader == false ? <input type="submit" value="Post to Lectio" className="ds-u-margin-left--1 ds-c-button ds-c-button--primary" /> : null}
+                      {this.state.message != '' ?
+                        <div className="ds-c-alert ds-c-alert--success">
+                          <div className="ds-c-alert__body">
+                            <p className="ds-c-alert__text">{this.state.message} <a target="_blank" href={this.state.siteUrl + this.state.taskId}>{this.state.taskId ? "#" + this.state.taskId : null}</a></p>
+                          </div>
+                        </div> : null}
+                    </div>
+                  </form>
+                </div>
+                : null}
+              {this.state.showJsonTree ? <div id="panel-meta"><ExtractedContent jsonData={this.state.metaDataJSON} ></ExtractedContent></div> : null}
+              {this.state.showShare ? <div id="panel-share"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
+              {this.state.showAttachmentTab ? <div id="panel-attachment"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
+              {this.state.showImgTab ? <div id="panel-img"><Popup
+                text='Close'
+                closePopup={this.togglePopup.bind(this)}
+                images={this.state.allImages}
+                selectedImage={this.state.allImages}
+                onChangeValue={this.handleChangeValue}
+              />
+              </div> : null}
+              {this.state.showMsgTab ? <div id="panel-msg"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
+              {this.state.showNotificationTab ? <div id="panel-notification"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
+              {this.state.showSettings ? <div id="panel-notification">
+                <div className="usa-accordion site-accordion-code">
+                  <h4 className="usa-accordion__heading site-accordion-code">
+                    <button
+                      className="usa-accordion__button"
+                      aria-expanded="true"
+                      aria-controls="configurationSettings">
+                      Configuration and Settings
+              </button>
+                  </h4>
+                  <div id="configurationSettings" className="usa-accordion__content usa-prose">
+                    <p className="ds-u-margin--0">
+                      <label>
+                        <input type="text" className="ds-c-field ds-u-border--1" value={this.state.apiKey} onChange={this.handleApikey} />
+                      </label>
+                    </p>
+                    <input type="button" value="Save Settings" className="ds-u-margin--0 ds-c-button ds-c-button--primary" onClick={this.saveSetting} />
+                    {this.state.messageApiKey != '' ?
+                      <div className="ds-u-margin-top--1 ds-c-alert ds-c-alert--success">
+                        <div className="ds-c-alert__body">
+                          <p className="ds-c-alert__text">{this.state.messageApiKey} </p>
+                        </div>
+                      </div> : null}
+
+                      {this.state.messageApiKeyErr != '' ?
+                      <div className="ds-u-margin-top--1 ds-c-alert ds-c-alert--danger">
+                        <div className="ds-c-alert__body">
+                          <p className="ds-c-alert__text">{this.state.messageApiKeyErr} </p>
+                        </div>
+                      </div> : null}
+
                   </div>
-                  : null}
-                {this.state.showJsonTree ? <div id="panel-meta"><ExtractedContent jsonData={this.state.metaDataJSON} ></ExtractedContent></div> : null}
-                {this.state.showShare ? <div id="panel-share"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
-                {this.state.showAttachmentTab ? <div id="panel-attachment"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
-                {this.state.showImgTab ? <div id="panel-img"><Popup
-                  text='Close'
-                  closePopup={this.togglePopup.bind(this)}
-                  images={this.state.allImages}
-                  selectedImage={this.state.allImages}
-                  onChangeValue={this.handleChangeValue}
-                />
-                </div> : null}
-                {this.state.showMsgTab ? <div id="panel-msg"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
-                {this.state.showNotificationTab ? <div id="panel-notification"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
-                {this.state.showSettings ? <div id="panel-notification"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
-              </div>
+                </div>
+              </div> : null}
             </div>
             <div className="ds-u-padding--0 ds-l-col--1 ds-u-border-left--1">
               <div >
                 <div>
-                  <ul className="ds-c-vertical-nav">
-                    <li className="ds-c-vertical-nav__item" onClick={this.activateTabs}>
+                  <ul className={[style.verticalNavCustom, 'ds-c-vertical-nav'].join(' ')}>
+                    <li className={this.state.showEdit ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
                       <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="editTab" className={[style.imgIcons, 'ds-u-margin-top--2'].join(' ')} src={this.state.showEdit ? editActiveImage : editInactiveImage} alt="Edit" /></a>
                     </li>
-                    <li className="ds-c-vertical-nav__item" onClick={this.activateTabs}>
-                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="jsonTree" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showJsonTree ? jsonTreeViewerActive : jsonTreeViewerInActive} alt="Json Tree" /></a>
+                    <li className={this.state.showJsonTree ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
+                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="jsonTree" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showJsonTree ? jsonTreeViewerActive : jsonTreeViewerInActive} alt="Meta Data" /></a>
                     </li>
-                    <li className="ds-c-vertical-nav__item" onClick={this.activateTabs}>
-                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="imgTab" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showImgTab ? imgIconActive : imgIconInactive} alt="Json Tree" /></a>
+                    <li className={this.state.showImgTab ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
+                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="imgTab" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showImgTab ? imgIconActive : imgIconInactive} alt="Images" /></a>
                     </li>
-                    <li className="ds-c-vertical-nav__item" onClick={this.activateTabs}>
-                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="shareTab" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showShare ? shareImageActive : shareImageInactive} alt="Json Tree" /></a>
+                    <li className={this.state.showShare ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
+                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="shareTab" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showShare ? shareImageActive : shareImageInactive} alt="share" /></a>
                     </li>
-                    <li className="ds-c-vertical-nav__item" onClick={this.activateTabs}>
-                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="notificationTab" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showNotificationTab ? notificationIconActive : notificationIconInactive} alt="Json Tree" /></a>
+                    <li className={this.state.showNotificationTab ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
+                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="notificationTab" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showNotificationTab ? notificationIconActive : notificationIconInactive} alt="Notifications" /></a>
                     </li>
-                    <li className="ds-c-vertical-nav__item" onClick={this.activateTabs}>
-                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="attachmentTab" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showAttachmentTab ? attachmentIconActive : attachmentIconInactive} alt="Json Tree" /></a>
+                    <li className={this.state.showAttachmentTab ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
+                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="attachmentTab" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showAttachmentTab ? attachmentIconActive : attachmentIconInactive} alt="Attachment" /></a>
                     </li>
-                    <li className="ds-c-vertical-nav__item" onClick={this.activateTabs}>
-                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="msgTab" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showMsgTab ? messageIconActive : messageIconInactive} alt="Json Tree" /></a>
+                    <li className={this.state.showMsgTab ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
+                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="msgTab" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showMsgTab ? messageIconActive : messageIconInactive} alt="Messages" /></a>
                     </li>
-                    <li className="ds-c-vertical-nav__item" onClick={this.activateTabs}>
-                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="settingsTab" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showSettings ? settingsActiveIcon : settingsInActiveIcon} alt="Json Tree" /></a>
+                    <li className={this.state.showSettings ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
+                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="settingsTab" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showSettings ? settingsActiveIcon : settingsInActiveIcon} alt="Settings" /></a>
                     </li>
                   </ul>
                 </div>
@@ -505,7 +586,7 @@ export default class Customform extends Component {
             <div className="ds-u-font-size--h3 ds-u-text-align--center ds-u-margin-bottom--3">
               You are not authenticated yet, <br />please log in to continue.
           </div>
-            <hr />
+            <hr className="on ds-u-fill--gray-lightest" />
             <div className="ds-u-text-align--center ds-u-margin-top--4">
               <div claasName="ds-u-margin-top--4"><a className="ds-c-button ds-c-button--primary" target="_blank" href={APIDATA.OPENPROJECT_DOMAIN}>Sign in</a></div>
               <div className="ds-u-font-style--italic ds-u-margin-top--4 ds-u-margin-bottom--2">
@@ -527,6 +608,8 @@ class Popup extends React.Component {
       probs: this.props,
       articleTab: true,
       customTab: false,
+      imgHeight: '',
+      imgWidth: ''
     };
     this.handleClick = this.handleClick.bind(this);
     this.openTab = this.openTab.bind(this);
@@ -535,6 +618,15 @@ class Popup extends React.Component {
   componentDidMount() {
 
     if (this.props.images.length > 0) {
+      const theImage = new Image();
+      theImage.src = this.props.images[0];
+      const self = this;
+      theImage.onload = function () {
+        self.setState({
+          imgHeight: theImage.height,
+          imgWidth: theImage.width
+        });
+      };
       this.setState({ src: this.props.images[0] });
     }
   }
@@ -542,6 +634,15 @@ class Popup extends React.Component {
     this.setState({ src: event.target.files[0] });
   }
   handleClick(event) {
+    const theImage = new Image();
+    const self = this;
+    theImage.src = event.target.src;
+    theImage.onload = function () {
+      self.setState({
+        imgHeight: theImage.height,
+        imgWidth: theImage.width
+      });
+    };
     this.setState({ src: event.target.src });
     this.state.probs.onChangeValue(event);
   }
@@ -575,6 +676,7 @@ class Popup extends React.Component {
           <div id="featurePage" className="usa-accordion__content usa-prose">
             <p className="ds-u-margin-top--0">
               <img src={this.state.src} className={style.ogImages}></img>
+              <span className={[style.imgSizeDisplay, 'preview__label ds-u-font-size--base ds-u-font-style--normal'].join(' ')}>{this.state.imgHeight} x {this.state.imgWidth} px</span>
             </p>
             <Tabs>
               <TabPanel id="article" className={style.imageGallery} tab="Article images">
@@ -582,7 +684,7 @@ class Popup extends React.Component {
                   <section className="ds-l-container">
                     <div className="ds-l-row">
                       {this.props.images.map((value, index) => {
-                        return <div className="ds-l-col--4 ds-u-padding--1 ds-u-border--1"><img id="editTab" onClick={this.handleClick} alt={index} className={style.object_fit_cover} src={value} width="100" height="100"></img></div>;
+                        return <div className={this.state.src == value ? "ds-l-col--4 ds-u-padding--1 ds-u-border--dark ds-u-border--1" : "ds-l-col--4 ds-u-padding--1 ds-u-border--1"}><img id="editTab" onClick={this.handleClick} alt={index} className={style.object_fit_cover} src={value} width="100" height="100"></img></div>;
                       })}
                     </div>
                   </section>
@@ -590,7 +692,7 @@ class Popup extends React.Component {
               </TabPanel>
               <TabPanel id="custom" tab="Custom image">
                 <div>
-                  <input className="ds-c-field" id="input-text" type="text"></input>
+                  <input className="ds-c-field ds-u-border--1" id="input-text" type="text"></input>
                   <input className="ds-c-field" id="input-file" type="file" onChange={this.fileChangedHandler}></input>
                 </div>
               </TabPanel>
