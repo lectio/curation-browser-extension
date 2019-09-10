@@ -123,10 +123,11 @@
 }
 .object_fit_cover {
   width: 100%;
-    height: auto;
-    -o-object-fit: contain;
-    object-fit: contain;
-    max-height: 60px;
+  height: auto;
+  -o-object-fit: contain;
+  object-fit: contain;
+  max-height: 60px;
+  cursor: pointer;
 }
 .close {
   position: absolute;
@@ -295,4 +296,87 @@
   width: 30%;
   text-align: center;
   top: 70px;
+}
+.ds-c-alert{
+  background-position: 16px 7px !important;
+}
+.sidebarIcons{
+  height: 40px;
+  width: 40px;
+  background-size: 30px auto;
+  background-repeat: no-repeat;
+  background-position: center center;
+  border: none;
+}
+.editActive {
+  background-image: url('/img/edit-active.png');
+}
+.editInActive:hover {
+  background-image: url('/img/edit-active.png');
+}
+.editInActive {
+  background-image: url('/img/edit-inactive.png');
+}
+.metaActive{
+  background-image: url('/img/metadata-active.png');
+}
+.metaInActive{
+  background-image: url('/img/metadata-inactive.png');
+}
+.metaInActive:hover {
+  background-image: url('/img/metadata-active.png');
+}
+.imgActive{
+  background-image: url('/img/imgIcon-active.png');
+}
+.imgInActive{
+  background-image: url('/img/imgIcon-inactive.png');
+}
+.imgInActive:hover {
+  background-image: url('/img/imgIcon-active.png');
+}
+.shareActive{
+  background-image: url('/img/share-active.png');
+}
+.shareInActive{
+  background-image: url('/img/share-inactive.png');
+}
+.shareInActive:hover {
+  background-image: url('/img/share-active.png');
+}
+.notificationActive{
+  background-image: url('/img/notification-active.png');
+}
+.notificationInActive{
+  background-image: url('/img/notification-inactive.png');
+}
+.notificationInActive:hover {
+  background-image: url('/img/notification-active.png');
+}
+.attachmentActive{
+  background-image: url('/img/attachment-active.png');
+}
+.attachmentInActive{
+  background-image: url('/img/attachment-inactive.png');
+}
+.attachmentInActive:hover {
+  background-image: url('/img/attachment-active.png');
+}
+.messageActive{
+  background-image: url('/img/message-active.png');
+}
+.messageInActive{
+  background-image: url('/img/message-inactive.png');
+}
+.messageInActive:hover{
+  background-image: url('/img/message-active.png');
+}
+.settingsActive{
+  background-image: url('/img/settings-active.png');
+}
+.settingsInActive{
+  background-image: url('/img/settings-inactive.png');
+}
+.settingsInActive:hover{
+  background-image: url('/img/settings-active.png');
 }

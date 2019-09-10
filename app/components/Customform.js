@@ -6,23 +6,7 @@ import * as config from '../constants/config.json';
 import * as APIDATA from '../constants/apidata';
 import Cookies from 'js-cookie';
 // import apiData, { APIDATA.Base_Url } from '../constants/apidata';
-import shareImageInactive from '../../chrome/assets/img/share-inactive.png';
-import editActiveImage from '../../chrome/assets/img/edit-active.png';
-import imgIconInactive from '../../chrome/assets/img/imgIcon-inactive.png';
-import notificationIconInactive from '../../chrome/assets/img/notification-inactive.png';
-import attachmentIconInactive from '../../chrome/assets/img/attachment-inactive.png';
-import messageIconInactive from '../../chrome/assets/img/message-inactive.png';
-import shareImageActive from '../../chrome/assets/img/share-active.png';
-import editInactiveImage from '../../chrome/assets/img/edit-inactive.png';
-import imgIconActive from '../../chrome/assets/img/imgIcon-active.png';
-import notificationIconActive from '../../chrome/assets/img/notification-active.png';
-import attachmentIconActive from '../../chrome/assets/img/attachment-active.png';
-import messageIconActive from '../../chrome/assets/img/message-active.png';
 import logo from '../../chrome/assets/img/logo-small.png';
-import jsonTreeViewerActive from '../../chrome/assets/img/metadata-active.png';
-import jsonTreeViewerInActive from '../../chrome/assets/img/metadata-inactive.png';
-import settingsActiveIcon from '../../chrome/assets/img/settings-active.png';
-import settingsInActiveIcon from '../../chrome/assets/img/settings-inactive.png';
 
 export default class Customform extends Component {
   constructor(props) {
@@ -58,7 +42,8 @@ export default class Customform extends Component {
       fetchingContents: true,
       apiKey:'',
       messageApiKey:'',
-      messageApiKeyErr:''
+      messageApiKeyErr:'',
+      baseUrl:'',
     };
     this.handleChange = this.handleChange.bind(this);
     this.handleValidate = this.handleValidate.bind(this);
@@ -67,11 +52,12 @@ export default class Customform extends Component {
     this.activateTabs = this.activateTabs.bind(this);
     this.getCookies = this.getCookies.bind(this);
     this.saveSetting = this.saveSetting.bind(this);
-    this.updateAPiKeyState = this.updateAPiKeyState.bind(this);
+    this.updateConfigState = this.updateConfigState.bind(this);
   }
   componentDidMount() {
-    var key = 'apiKey';
-    chrome.storage.local.get(key, this.updateAPiKeyState);
+    
+    chrome.storage.local.get(['apiKey', 'baseUrl'], this.updateConfigState);
+    // chrome.storage.local.get(, this.updateConfigState);
 
     let selectedContent = '';
     chrome.tabs.executeScript({
@@ -82,7 +68,7 @@ export default class Customform extends Component {
       }
     });
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-     
+
       const url = tabs[0].url;
       this.setState({ url: url });
       const x = new XMLHttpRequest();
@@ -150,33 +136,7 @@ export default class Customform extends Component {
       x.send(null);
     }.bind(this));
   }
-  updateAPiKeyState(val){
-    if(val['apiKey'] == ''){
-      this.setState({showEdit : false});
-      this.setState({showSettings : true});
-    }
-
-    const authdata = {
-      method: 'GET',
-      headers: {
-        'Authorization': 'Basic ' + btoa('apikey:'+val['apiKey']),  
-      }
-    };
-
-    fetch(APIDATA.BASE_URL + '/my_preferences/', authdata)
-    .then(response => {
-      if (response.status === 200) {
-        
-        this.setState({ apiKey: val['apiKey'] });
-      }else{
-        this.setState({showEdit : false});
-        this.setState({showSettings : true});
-        
-      }
-      return response.json();
-    })
-
-  }
+  
   handleChange(event) {
     this.setState({ value: event.target.value });
   }
@@ -190,7 +150,10 @@ export default class Customform extends Component {
     this.setState({ apiKey: e.target.value });
    
   }
-  saveSetting(event){
+  handleBaseUrl = e => {
+    this.setState({ baseUrl: e.target.value });
+  }
+  saveSetting(event) {
     event.preventDefault();
 
     const authdata = {
@@ -201,30 +164,69 @@ export default class Customform extends Component {
     };
     console.log(authdata);
     console.log('apikey',this.state.apiKey);
-    fetch(APIDATA.BASE_URL + '/my_preferences/', authdata)
+    fetch(this.state.baseUrl + APIDATA.API_URL + '/my_preferences/', authdata)
     .then(response => {
       if (response.status === 200) {
         var obj = {};       
-        var key = "apiKey";  
-        obj[key] = this.state.apiKey;   
+        obj['apiKey'] = this.state.apiKey;   
+        obj['baseUrl'] = this.state.baseUrl;   
+        console.log(obj);
         chrome.storage.local.set(obj);
+
         this.setState({ messageApiKey: 'ApiKey Saved Successfully.' });
+        this.setState({ messageApiKeyErr: '' });
       }else{
         this.setState({ messageApiKeyErr: 'Invalid API Key.' });
+        this.setState({ messageApiKey: '' });
         
       }
       return response.json();
+    }).catch(response=> {
+      this.setState({ messageApiKeyErr: 'Invalid API Key / Base Url.' });
+      this.setState({ messageApiKey: '' });
     });
- 
-
-
-    
-
   }
   togglePopup() {
     this.setState({
       showPopup: !this.state.showPopup
     });
+  }
+  updateConfigState(val){
+
+    console.log(val);
+    if(val['apiKey'] == '' || val['baseUrl'] == ''){
+      this.setState({showEdit : false});
+      this.setState({showSettings : true});
+    }
+    console.log('val of baseurl',val['baseUrl']);
+    if(val['baseUrl'] == '' ||val['baseUrl'] ==  undefined){
+      this.setState({baseUrl :  APIDATA.BASE_URL });
+    }
+
+    const authdata = {
+      method: 'GET',
+      headers: {
+        'Authorization': 'Basic ' + btoa('apikey:'+val['apiKey']),  
+      }
+    };
+
+    fetch(val['baseUrl'] + APIDATA.API_URL + '/my_preferences/', authdata)
+    .then(response => {
+      if (response.status === 200) {
+        
+        this.setState({ apiKey: val['apiKey'] });
+        this.setState({ baseUrl: val['baseUrl'] });
+      }else{
+        this.setState({showEdit : false});
+        this.setState({showSettings : true});
+        
+      }
+      return response.json();
+    }).catch(response=> {
+        this.setState({showEdit : false});
+        this.setState({showSettings : true});
+    });
+
   }
   handleChangeValue = e => {
     this.setState({ showPopup: e.target.value });
@@ -268,11 +270,11 @@ export default class Customform extends Component {
       method: 'POST',
       body: params,
       headers: {
-        Authorization: 'Basic ' + btoa('apikey:'+this.state.apiKey),
+        Authorization: 'Basic ' + btoa('apikey:' + this.state.apiKey),
         'Content-Type': 'application/json;charset=UTF-8',
       }
     };
-    fetch(APIDATA.BASE_URL + '/projects/' + APIDATA.PROJECT_ID + '/work_packages/', data)
+    fetch(this.state.baseUrl + APIDATA.API_URL + '/projects/' + APIDATA.PROJECT_ID + '/work_packages/', data)
       .then(response => {
         if (response.status === 201) {
           // this.setState({ message: 'Saved Successfully.' });
@@ -367,7 +369,7 @@ export default class Customform extends Component {
         'Authorization': 'Basic ' + btoa('apikey:'+this.state.apiKey),
       }
     };
-    fetch(APIDATA.BASE_URL + '/work_packages/' + id + '/attachments', authdata);
+    fetch(this.state.baseUrl + APIDATA.API_URL + '/work_packages/' + id + '/attachments', authdata);
   }
   uploadOgData(id) {
     const ogFile = new Blob([JSON.stringify(this.state.ogData)], { type: 'application/json' });
@@ -381,10 +383,10 @@ export default class Customform extends Component {
       method: 'POST',
       body: formBody,
       headers: {
-        'Authorization': 'Basic ' + btoa('apikey:'+this.state.apiKey),
+        'Authorization': 'Basic ' + btoa('apikey:' + this.state.apiKey),
       }
     };
-    fetch(APIDATA.BASE_URL + '/work_packages/' + id + '/attachments', authdata);
+    fetch(this.state.baseUrl + APIDATA.API_URL + '/work_packages/' + id + '/attachments', authdata);
   }
   uploadMetaData(id) {
     const ogFile = new Blob([JSON.stringify(this.state.metaData)], { type: 'application/json' });
@@ -401,7 +403,7 @@ export default class Customform extends Component {
         'Authorization': 'Basic ' + btoa('apikey:'+this.state.apiKey),
       }
     };
-    fetch(APIDATA.BASE_URL + '/work_packages/' + id + '/attachments', authdata);
+    fetch(this.state.baseUrl + APIDATA.API_URL + '/work_packages/' + id + '/attachments', authdata);
   }
   activateTabs(event) {
     event.preventDefault();
@@ -417,17 +419,17 @@ export default class Customform extends Component {
       editTab = true;
     } else if (String(event.target.id) === 'shareTab') {
       shareTab = true;
-    } else if (event.target.id === 'attachmentTab') {
+    } else if (String(event.target.id) === 'attachmentTab') {
       attachmentTab = true;
-    } else if (event.target.id === 'imgTab') {
+    } else if (String(event.target.id) === 'imgTab') {
       imgTab = true;
-    } else if (event.target.id === 'msgTab') {
+    } else if (String(event.target.id) === 'msgTab') {
       msgTab = true;
-    } else if (event.target.id === 'notificationTab') {
+    } else if (String(event.target.id) === 'notificationTab') {
       notificationTab = true;
-    } else if (event.target.id === 'jsonTree') {
+    } else if (String(event.target.id) === 'jsonTree') {
       jsonTreeTab = true;
-    } else if (event.target.id === 'settingsTab') {
+    } else if (String(event.target.id) === 'settingsTab') {
       showSettingsTab = true;
     }
     this.setState({
@@ -491,14 +493,29 @@ export default class Customform extends Component {
                       {this.state.message != '' ?
                         <div className="ds-c-alert ds-c-alert--success">
                           <div className="ds-c-alert__body">
-                            <p className="ds-c-alert__text">{this.state.message} <a target="_blank" href={this.state.siteUrl + this.state.taskId}>{this.state.taskId ? "#" + this.state.taskId : null}</a></p>
+                            <p className="ds-c-alert__text">{this.state.message} <a target="_blank" href={this.state.baseUrl + this.state.siteUrl + this.state.taskId}>{this.state.taskId ? "#" + this.state.taskId : null}</a></p>
                           </div>
                         </div> : null}
                     </div>
                   </form>
                 </div>
                 : null}
-              {this.state.showJsonTree ? <div id="panel-meta"><ExtractedContent jsonData={this.state.metaDataJSON} ></ExtractedContent></div> : null}
+              {this.state.showJsonTree ? <div id="panel-meta">
+                <div className="usa-accordion site-accordion-code">
+                  <h4 className="usa-accordion__heading site-accordion-code">
+                    <button
+                      className="usa-accordion__button"
+                      aria-expanded="true"
+                      aria-controls="metaDataContent">
+                      Extracted meta data
+              </button>
+                  </h4>
+                  <div id="metaDataContent" className="usa-accordion__content usa-prose">
+                    <ExtractedContent jsonData={this.state.metaDataJSON} ></ExtractedContent>
+                  </div>
+                </div>
+
+              </div> : null}
               {this.state.showShare ? <div id="panel-share"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
               {this.state.showAttachmentTab ? <div id="panel-attachment"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
               {this.state.showImgTab ? <div id="panel-img"><Popup
@@ -523,10 +540,17 @@ export default class Customform extends Component {
                   </h4>
                   <div id="configurationSettings" className="usa-accordion__content usa-prose">
                     <p className="ds-u-margin--0">
-                      <label>
+                      <label> OpenProject Token ID
                         <input type="text" className="ds-c-field ds-u-border--1" value={this.state.apiKey} onChange={this.handleApikey} />
                       </label>
                     </p>
+
+                    <p className="ds-u-margin--0">
+                      <label> OpenProject Base Url
+                        <input type="text" className="ds-c-field ds-u-border--1" value={this.state.baseUrl} onChange={this.handleBaseUrl} />
+                      </label>
+                    </p>
+                    
                     <input type="button" value="Save Settings" className="ds-u-margin--0 ds-c-button ds-c-button--primary" onClick={this.saveSetting} />
                     {this.state.messageApiKey != '' ?
                       <div className="ds-u-margin-top--1 ds-c-alert ds-c-alert--success">
@@ -535,13 +559,12 @@ export default class Customform extends Component {
                         </div>
                       </div> : null}
 
-                      {this.state.messageApiKeyErr != '' ?
+                    {this.state.messageApiKeyErr != '' ?
                       <div className="ds-u-margin-top--1 ds-c-alert ds-c-alert--danger">
                         <div className="ds-c-alert__body">
                           <p className="ds-c-alert__text">{this.state.messageApiKeyErr} </p>
                         </div>
                       </div> : null}
-
                   </div>
                 </div>
               </div> : null}
@@ -551,28 +574,28 @@ export default class Customform extends Component {
                 <div>
                   <ul className={[style.verticalNavCustom, 'ds-c-vertical-nav'].join(' ')}>
                     <li className={this.state.showEdit ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
-                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="editTab" className={[style.imgIcons, 'ds-u-margin-top--2'].join(' ')} src={this.state.showEdit ? editActiveImage : editInactiveImage} alt="Edit" /></a>
+                      <a className={this.state.showEdit ? [style.editActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.editInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="editTab"></a>
                     </li>
                     <li className={this.state.showJsonTree ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
-                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="jsonTree" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showJsonTree ? jsonTreeViewerActive : jsonTreeViewerInActive} alt="Meta Data" /></a>
+                      <a className={this.state.showJsonTree ? [style.metaActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.metaInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="jsonTree"></a>
                     </li>
                     <li className={this.state.showImgTab ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
-                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="imgTab" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showImgTab ? imgIconActive : imgIconInactive} alt="Images" /></a>
+                      <a className={this.state.showImgTab ? [style.imgActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.imgInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="imgTab"></a>
                     </li>
                     <li className={this.state.showShare ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
-                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="shareTab" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showShare ? shareImageActive : shareImageInactive} alt="share" /></a>
+                      <a className={this.state.showShare ? [style.shareActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.shareInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="shareTab"></a>
                     </li>
                     <li className={this.state.showNotificationTab ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
-                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="notificationTab" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showNotificationTab ? notificationIconActive : notificationIconInactive} alt="Notifications" /></a>
+                      <a className={this.state.showNotificationTab ? [style.notificationActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.notificationInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="notificationTab"></a>
                     </li>
                     <li className={this.state.showAttachmentTab ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
-                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="attachmentTab" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showAttachmentTab ? attachmentIconActive : attachmentIconInactive} alt="Attachment" /></a>
+                      <a className={this.state.showAttachmentTab ? [style.attachmentActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.attachmentInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="attachmentTab"></a>
                     </li>
                     <li className={this.state.showMsgTab ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
-                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="msgTab" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showMsgTab ? messageIconActive : messageIconInactive} alt="Messages" /></a>
+                      <a className={this.state.showMsgTab ? [style.messageActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.messageInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="msgTab"></a>
                     </li>
                     <li className={this.state.showSettings ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
-                      <a className="ds-c-vertical-nav__label ds-u-padding--0" href="#"><img id="settingsTab" className={[style.imgIcons, 'ds-u-margin-top--1'].join(' ')} src={this.state.showSettings ? settingsActiveIcon : settingsInActiveIcon} alt="Settings" /></a>
+                      <a className={this.state.showSettings ? [style.settingsActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.settingsInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="settingsTab"></a>
                     </li>
                   </ul>
                 </div>
