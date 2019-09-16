@@ -7,7 +7,6 @@ import * as APIDATA from '../constants/apidata';
 import Cookies from 'js-cookie';
 // import apiData, { APIDATA.Base_Url } from '../constants/apidata';
 import logo from '../../chrome/assets/img/logo-small.png';
-
 export default class Customform extends Component {
   constructor(props) {
     super(props);
@@ -40,25 +39,27 @@ export default class Customform extends Component {
       metaDataJSON: '',
       loader: false,
       fetchingContents: true,
-      apiKey:'',
-      messageApiKey:'',
-      messageApiKeyErr:'',
-      baseUrl:'',
+      apiKey: '',
+      messageApiKey: '',
+      messageApiKeyErr: '',
+      baseUrl: '',
+      cookie: '',
+      duplicateMessage: false,
+      parentId: null
     };
     this.handleChange = this.handleChange.bind(this);
-    this.handleValidate = this.handleValidate.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
     this.handleSummary = this.handleSummary.bind(this);
     this.activateTabs = this.activateTabs.bind(this);
     this.getCookies = this.getCookies.bind(this);
     this.saveSetting = this.saveSetting.bind(this);
     this.updateConfigState = this.updateConfigState.bind(this);
+    this.authenticate = this.authenticate.bind(this);
+    this.signinTab = this.signinTab.bind(this);
   }
   componentDidMount() {
-    
-    chrome.storage.local.get(['apiKey', 'baseUrl'], this.updateConfigState);
-    // chrome.storage.local.get(, this.updateConfigState);
-
+    // chrome.storage.local.get(['apiKey', 'baseUrl'], this.updateConfigState);
+    this.authenticate();
     let selectedContent = '';
     chrome.tabs.executeScript({
       code: 'window.getSelection().toString();'
@@ -68,7 +69,6 @@ export default class Customform extends Component {
       }
     });
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-
       const url = tabs[0].url;
       this.setState({ url: url });
       const x = new XMLHttpRequest();
@@ -86,7 +86,6 @@ export default class Customform extends Component {
           ogData.push({ 'name': og[i].attributes.property.nodeValue, content: og[i].attributes.content.nodeValue });
         }
         this.setState({ ogData: ogData });
-
         const metaDataOb = [];
         const meta = doc.getElementsByTagName('meta');
         let j = 0;
@@ -98,8 +97,8 @@ export default class Customform extends Component {
         this.setState({ metaData: metaDataOb });
         this.generateJSON(doc);
         if (x.readyState === 4) {
-          this.setState({ fetchingContents: false });
           if (x.status === 200) {
+            this.findDuplicate();
             if (desc) {
               desc = desc.getAttribute('content');
               if (selectedContent !== '') {
@@ -110,23 +109,37 @@ export default class Customform extends Component {
             }
             if (title) {
               title = title.getAttribute('content');
+              title = title.split(/[-|]/);
+              title = title[0];
               this.setState({ value: title });
             }
             if (image) {
               image = image.getAttribute('content');
+              const pattern = /^((http|https|www):\/\/)/;
+              if (!pattern.test(image)) {
+                let baseUrl = this.state.url.split('/');
+                baseUrl = baseUrl[0] + "//" + baseUrl[2];
+                image = baseUrl + image;
+              }
               this.setState({ image: image });
             }
+          } else {
+            this.setState({ fetchingContents: false });
           }
         }
         const images = doc.getElementsByTagName('img');
         const srcList = [];
-        srcList.push(image);
+        if (image) {
+          srcList.push(image);
+        }
         for (let i = 0; i < images.length; i++) {
           const img = images[i].src;
           const res = img.match(/ajax|email|icon|FB|social|small|facebook|logo/gi);
           if ((res == null) && (srcList.indexOf(img) === -1)) {
-            // if((res==null)&&(width >=150)&&(height>=75)&&($.inArray(img, srcList) === -1)) {
-            srcList.push(img);
+            const validUrl = this.checkURL(img);
+            if (validUrl) {
+              srcList.push(img);
+            }
           }
         }
         this.setState({ allImages: srcList });
@@ -136,7 +149,39 @@ export default class Customform extends Component {
       x.send(null);
     }.bind(this));
   }
-  
+  checkURL(url) {
+    return (url.match(/\.(jpeg|jpg|gif|png)$/) != null);
+  }
+  findDuplicate() {
+    const filterParam = 'filters=[{"' + APIDATA.cleanUrlField + '":{"operator":"~","values":["' + this.generateCleanURL(this.state.url) + '"]}}]';
+    const filterData = {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        // Authorization: 'Basic ' + btoa('apikey:' + this.state.apiKey),
+        'Content-Type': 'application/json;charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    };
+    fetch(APIDATA.BASE_URL + APIDATA.API_URL + '/projects/' + APIDATA.PROJECT_ID + '/work_packages/?' + filterParam, filterData)
+      .then(response => {
+        return response.json();
+      }).then((responseData) => {
+        this.setState({ fetchingContents: false });
+        if (typeof (responseData['_embedded']['elements']) !== 'undefined') {
+          const duplicateElements = responseData['_embedded']['elements'];
+          if (duplicateElements.length > 0) {
+            let lowest = Number.POSITIVE_INFINITY;
+            let tmp;
+            for (let i = duplicateElements.length - 1; i >= 0; i--) {
+              tmp = duplicateElements[i].id;
+              if (tmp < lowest) lowest = tmp;
+            }
+            this.setState({ parentId: lowest });
+          }
+        }
+      });
+  }
   handleChange(event) {
     this.setState({ value: event.target.value });
   }
@@ -148,7 +193,6 @@ export default class Customform extends Component {
   }
   handleApikey = e => {
     this.setState({ apiKey: e.target.value });
-   
   }
   handleBaseUrl = e => {
     this.setState({ baseUrl: e.target.value });
@@ -158,139 +202,156 @@ export default class Customform extends Component {
 
     const authdata = {
       method: 'GET',
+      credentials: 'include',
       headers: {
-        'Authorization': 'Basic ' + btoa('apikey:'+this.state.apiKey),  
+        // 'Authorization': 'Basic ' + btoa('apikey:' + this.state.apiKey),
+        'X-Requested-With': 'XMLHttpRequest'
       }
     };
-    console.log(authdata);
-    console.log('apikey',this.state.apiKey);
-    fetch(this.state.baseUrl + APIDATA.API_URL + '/my_preferences/', authdata)
-    .then(response => {
-      if (response.status === 200) {
-        var obj = {};       
-        obj['apiKey'] = this.state.apiKey;   
-        obj['baseUrl'] = this.state.baseUrl;   
-        console.log(obj);
-        chrome.storage.local.set(obj);
+    fetch(APIDATA.BASE_URL + APIDATA.API_URL + '/my_preferences/', authdata)
+      .then(response => {
+        if (response.status === 200) {
+          const obj = {};
+          obj['apiKey'] = this.state.apiKey;
+          obj['baseUrl'] = this.state.baseUrl;
+          chrome.storage.local.set(obj);
+          this.setState({ messageApiKey: 'ApiKey Saved Successfully.' });
+          this.setState({ messageApiKeyErr: '' });
+        } else {
+          this.setState({ messageApiKeyErr: 'Invalid API Key.' });
+          this.setState({ messageApiKey: '' });
 
-        this.setState({ messageApiKey: 'ApiKey Saved Successfully.' });
-        this.setState({ messageApiKeyErr: '' });
-      }else{
-        this.setState({ messageApiKeyErr: 'Invalid API Key.' });
+        }
+        return response.json();
+      }).catch(response => {
+        this.setState({ messageApiKeyErr: 'Invalid API Key / Base Url.' });
         this.setState({ messageApiKey: '' });
-        
-      }
-      return response.json();
-    }).catch(response=> {
-      this.setState({ messageApiKeyErr: 'Invalid API Key / Base Url.' });
-      this.setState({ messageApiKey: '' });
-    });
+      });
   }
   togglePopup() {
     this.setState({
       showPopup: !this.state.showPopup
     });
   }
-  updateConfigState(val){
-
-    console.log(val);
-    if(val['apiKey'] == '' || val['baseUrl'] == ''){
-      this.setState({showEdit : false});
-      this.setState({showSettings : true});
-    }
-    console.log('val of baseurl',val['baseUrl']);
-    if(val['baseUrl'] == '' ||val['baseUrl'] ==  undefined){
-      this.setState({baseUrl :  APIDATA.BASE_URL });
-    }
-
-    const authdata = {
-      method: 'GET',
-      headers: {
-        'Authorization': 'Basic ' + btoa('apikey:'+val['apiKey']),  
-      }
-    };
-
-    fetch(val['baseUrl'] + APIDATA.API_URL + '/my_preferences/', authdata)
-    .then(response => {
-      if (response.status === 200) {
-        
-        this.setState({ apiKey: val['apiKey'] });
-        this.setState({ baseUrl: val['baseUrl'] });
-      }else{
-        this.setState({showEdit : false});
-        this.setState({showSettings : true});
-        
-      }
-      return response.json();
-    }).catch(response=> {
-        this.setState({showEdit : false});
-        this.setState({showSettings : true});
-    });
-
+  updateConfigState(val) {
   }
   handleChangeValue = e => {
     this.setState({ showPopup: e.target.value });
     this.setState({ selectedImage: e.target.alt });
     this.setState({ image: this.state.allImages[Number(e.target.alt)] });
   }
-  handleValidate(event) {
-    return false;
-  }
-
-  handleSubmit(event) {
-    event.preventDefault();
-    if (this.handleValidate()) {
-      this.setState({ message: 'Duplicate Entry.' });
-      return false;
-    }
-    this.setState({ loader: true });
-    let params = 'title=' + this.state.value +
-      '&url=' + this.state.value +
-      '&summary=' + this.state.summary +
-      '&tags=' + this.state.value;
-    // Replace any instances of the URLEncoded space char with +
-    params = params.replace(/%20/g, '+');
-    params = JSON.stringify({
-      subject: this.state.value,
-      description: {
-        format: 'markdown',
-        raw: this.state.summary,
-        html: ''
-      },
-      customField1: this.state.url,
-      customField2: this.generateCleanURL(this.state.url),
-      _links: {
-        type: {
-          href: '/api/v3/types/8',
-          title: 'Post'
-        },
-      }
+  signinTab(){
+    chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+      const url = tabs[0].url;
+      if (url.indexOf(APIDATA.BASE_URL) == -1){
+        chrome.tabs.create({url:APIDATA.BASE_URL}, function(tab) {});
+      } 
     });
-    const data = {
-      method: 'POST',
-      body: params,
+  }
+  authenticate(){
+    const authdata = {
+      method: 'GET',
+      credentials: 'include',
       headers: {
-        Authorization: 'Basic ' + btoa('apikey:' + this.state.apiKey),
-        'Content-Type': 'application/json;charset=UTF-8',
+        'X-Requested-With':'XMLHttpRequest'
       }
     };
-    fetch(this.state.baseUrl + APIDATA.API_URL + '/projects/' + APIDATA.PROJECT_ID + '/work_packages/', data)
+    this.getCookies(APIDATA.BASE_URL, '_open_project_session', cookies => {
+      // console.log('ck',cookies);
+      chrome.cookies.set({ url: APIDATA.BASE_URL, name: '_open_project_session', value: cookies });
+      fetch(APIDATA.BASE_URL + APIDATA.API_URL + '/my_preferences/', authdata)
       .then(response => {
-        if (response.status === 201) {
-          // this.setState({ message: 'Saved Successfully.' });
+        if (response.status === 200) {
+          this.setState({authenticate: true});
+        } else {
+          this.setState({isLogin : false});
+          this.setState({showEdit : false});
+          this.setState({showSettings : true});
+          this.setState({authenticate: false});
         }
         return response.json();
-      }).then((catdata) => {
-        const webPackageId = catdata.id;
-        this.setState({ taskId: webPackageId });
-        this.toDataUrl(this.state.image, (myBase64) => {
-          this.uploadImage(webPackageId, myBase64);
-        });
-        this.setState({ siteUrl: APIDATA.SITE_URL });
-        this.setState({ message: 'Saved in ' + APIDATA.DOMAIN_NAME + ' as' });
-        this.setState({ loader: false });
-        this.uploadOgData(webPackageId);
-        this.uploadMetaData(webPackageId);
+      }).catch(response=> {
+          this.setState({isLogin : false});
+          this.setState({showEdit : false});
+          this.setState({showSettings : true});
+          this.setState({authenticate: false});
+      });
+    });
+  }
+  handleSubmit(event) {
+    event.preventDefault();
+    const filterParam = 'filters=[{"' + APIDATA.cleanUrlField + '":{"operator":"~","values":["' + this.generateCleanURL(this.state.url) + '"]}}]';
+    let total = 0;
+    const filterData = {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        // Authorization: 'Basic ' + btoa('apikey:' + this.state.apiKey),
+        'Content-Type': 'application/json;charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    };
+
+    fetch(APIDATA.BASE_URL + APIDATA.API_URL + '/projects/' + APIDATA.PROJECT_ID + '/work_packages/?' + filterParam, filterData)
+      .then(response => {
+        return response.json();
+      }).then((respdata) => {
+        total = respdata.total;
+        if (Number(total) > 0) {
+          this.setState({ duplicateMessage: 'Duplicate Entry.' });
+        } else {
+          this.setState({ loader: true });
+          let params = 'title=' + this.state.value +
+            '&url=' + this.state.value +
+            '&summary=' + this.state.summary +
+            '&tags=' + this.state.value;
+          // Replace any instances of the URLEncoded space char with +
+          params = params.replace(/%20/g, '+');
+          params = JSON.stringify({
+            subject: this.state.value,
+            description: {
+              format: 'markdown',
+              raw: this.state.summary,
+              html: ''
+            },
+            customField1: this.state.url,
+            customField2: this.generateCleanURL(this.state.url),
+            _links: {
+              type: {
+                href: '/api/v3/types/8',
+                title: 'Post'
+              },
+            }
+          });
+          const data = {
+            method: 'POST',
+            body: params,
+            credentials: 'include',
+            headers: {
+              // Authorization: 'Basic ' + btoa('apikey:' + this.state.apiKey),
+              'X-Requested-With': 'XMLHttpRequest',
+              'Content-Type': 'application/json;charset=UTF-8',
+            }
+          };
+          fetch(APIDATA.BASE_URL + APIDATA.API_URL + '/projects/' + APIDATA.PROJECT_ID + '/work_packages/', data)
+            .then(response => {
+              if (response.status === 201) {
+                // this.setState({ message: 'Saved Successfully.' });
+              }
+              return response.json();
+            }).then((catdata) => {
+              const webPackageId = catdata.id;
+              this.setState({ taskId: webPackageId });
+              this.toDataUrl(this.state.image, (myBase64) => {
+                this.uploadImage(webPackageId, myBase64);
+              });
+              this.setState({ siteUrl: APIDATA.SITE_URL });
+              this.setState({ message: 'Saved in ' + APIDATA.DOMAIN_NAME + ' as' });
+              this.setState({ loader: false });
+              this.uploadOgData(webPackageId);
+              this.uploadMetaData(webPackageId);
+            });
+        }
       });
   }
   // eslint-disable-next-line camelcase
@@ -365,11 +426,13 @@ export default class Customform extends Component {
     const authdata = {
       method: 'POST',
       body: formBody,
+      credentials: 'include',
       headers: {
-        'Authorization': 'Basic ' + btoa('apikey:'+this.state.apiKey),
+        // 'Authorization': 'Basic ' + btoa('apikey:' + this.state.apiKey),
+        'X-Requested-With': 'XMLHttpRequest'
       }
     };
-    fetch(this.state.baseUrl + APIDATA.API_URL + '/work_packages/' + id + '/attachments', authdata);
+    fetch(APIDATA.BASE_URL + APIDATA.API_URL + '/work_packages/' + id + '/attachments', authdata);
   }
   uploadOgData(id) {
     const ogFile = new Blob([JSON.stringify(this.state.ogData)], { type: 'application/json' });
@@ -382,11 +445,13 @@ export default class Customform extends Component {
     const authdata = {
       method: 'POST',
       body: formBody,
+      credentials: 'include',
       headers: {
-        'Authorization': 'Basic ' + btoa('apikey:' + this.state.apiKey),
+        // 'Authorization': 'Basic ' + btoa('apikey:' + this.state.apiKey),
+        'X-Requested-With': 'XMLHttpRequest'
       }
     };
-    fetch(this.state.baseUrl + APIDATA.API_URL + '/work_packages/' + id + '/attachments', authdata);
+    fetch(APIDATA.BASE_URL + APIDATA.API_URL + '/work_packages/' + id + '/attachments', authdata);
   }
   uploadMetaData(id) {
     const ogFile = new Blob([JSON.stringify(this.state.metaData)], { type: 'application/json' });
@@ -399,11 +464,13 @@ export default class Customform extends Component {
     const authdata = {
       method: 'POST',
       body: formBody,
+      credentials: 'include',
       headers: {
-        'Authorization': 'Basic ' + btoa('apikey:'+this.state.apiKey),
+        // 'Authorization': 'Basic ' + btoa('apikey:' + this.state.apiKey),
+        'X-Requested-With': 'XMLHttpRequest'
       }
     };
-    fetch(this.state.baseUrl + APIDATA.API_URL + '/work_packages/' + id + '/attachments', authdata);
+    fetch(APIDATA.BASE_URL + APIDATA.API_URL + '/work_packages/' + id + '/attachments', authdata);
   }
   activateTabs(event) {
     event.preventDefault();
@@ -456,7 +523,7 @@ export default class Customform extends Component {
   }
   render() {
     return (
-      <section>
+      <section className={style.sectionContent}>
         {this.state.isLogin ? <div className="ds-l-container">
           <div className="ds-l-row">
             <div className="ds-u-padding--0 ds-l-col--11">
@@ -472,31 +539,42 @@ export default class Customform extends Component {
                         <span className="ds-c-spinner ds-c-spinner--small" aria-valuetext="Fetching Contents" role="progressbar"></span> Fetching Contents
                         </button>
                     </p> : null}
-                    <p><label>
-                      <textarea className={[style.textareaDesc, 'preview__label ds-u-font-size--small ds-u-font-style--normal'].join(' ')} value={this.state.summary} onChange={this.handleSummary} />
-                    </label></p>
-                    {this.state.image.length > 0 &&
-                      <p>
+                    <p>
+                      <label>
+                        <textarea className={[style.textareaDesc, 'preview__label ds-u-font-size--small ds-u-font-style--normal'].join(' ')} value={this.state.summary} onChange={this.handleSummary} />
+                      </label>
+                    </p>
+
+                    <p className={style.ogImageContainer}>
+                      {this.state.image.length > 0 ?
                         <img id="imgTab" onClick={this.activateTabs} src={this.state.image} className={style.ogImages} alt="Og Image"></img>
-                      </p>
-                    }
+                        : null}
+                    </p>
+                    {this.state.fetchingContents ? null : <div><hr className="on ds-u-fill--gray-lightest" /><p className="ds-u-margin--0">
+                      <label>
+                        <input type="text" className={this.state.parentId ? [style.textareaLink, 'preview__label ds-u-font-style--normal ds-u-color--white on ds-u-fill--secondary-dark'].join(' ') : [style.textareaLink, 'preview__label ds-u-font-style--normal'].join(' ')} value={this.generateCleanURL(this.state.url)} onChange={this.handleUrl} style={this.state.parentId ? { height: '20px' } : { height: '10px' }} />
+                      </label>
+                    </p></div>}
                     <hr className="on ds-u-fill--gray-lightest" />
-                    <p className="ds-u-margin--0"><label>
-                      <input type="text" className={[style.textareaLink, 'preview__label ds-u-font-style--normal'].join(' ')} value={this.generateCleanURL(this.state.url)} onChange={this.handleUrl} />
-                    </label></p>
-                    <hr className="on ds-u-fill--gray-lightest" />
-                    <div className={style.sucessBlock}>
+                    {this.state.fetchingContents ? null : <div className={style.sucessBlock}>
                       {this.state.loader ? <button className="ds-u-margin--0 ds-c-button ds-c-button--primary">
                         <span className="ds-c-spinner ds-c-spinner--small ds-c-spinner--inverse" aria-valuetext="Saving" role="progressbar"></span> Saving
                         </button> : null}
-                      {this.state.message == '' && this.state.loader == false ? <input type="submit" value="Post to Lectio" className="ds-u-margin-left--1 ds-c-button ds-c-button--primary" /> : null}
+                      {this.state.duplicateMessage == '' && this.state.message == '' && this.state.loader == false ? <input type="submit" value="Post to Lectio" className="ds-u-margin-left--1 ds-c-button ds-c-button--primary" /> : null}
+                      {this.state.duplicateMessage != '' ?
+                        <div className="ds-c-alert ds-c-alert--danger">
+                          <div className="ds-c-alert__body">
+                            <p className="ds-c-alert__text">{this.state.duplicateMessage} </p>
+                          </div>
+                        </div> : null}
                       {this.state.message != '' ?
                         <div className="ds-c-alert ds-c-alert--success">
                           <div className="ds-c-alert__body">
-                            <p className="ds-c-alert__text">{this.state.message} <a target="_blank" href={this.state.baseUrl + this.state.siteUrl + this.state.taskId}>{this.state.taskId ? "#" + this.state.taskId : null}</a></p>
+                            <p className="ds-c-alert__text">{this.state.message} <a target="_blank" href={APIDATA.BASE_URL + APIDATA.SITE_URL + this.state.taskId}>{this.state.taskId ? "#" + this.state.taskId : null}</a></p>
                           </div>
                         </div> : null}
-                    </div>
+                    </div>}
+
                   </form>
                 </div>
                 : null}
@@ -529,7 +607,7 @@ export default class Customform extends Component {
               {this.state.showMsgTab ? <div id="panel-msg"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
               {this.state.showNotificationTab ? <div id="panel-notification"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
               {this.state.showSettings ? <div id="panel-notification">
-                <div className="usa-accordion site-accordion-code">
+                {/* <div className="usa-accordion site-accordion-code">
                   <h4 className="usa-accordion__heading site-accordion-code">
                     <button
                       className="usa-accordion__button"
@@ -539,18 +617,17 @@ export default class Customform extends Component {
               </button>
                   </h4>
                   <div id="configurationSettings" className="usa-accordion__content usa-prose">
-                    <p className="ds-u-margin--0">
+                    <p className="ds-u-margin--0 preview__label ds-u-font-size--base ds-u-font-style--normal">
                       <label> OpenProject Token ID
                         <input type="text" className="ds-c-field ds-u-border--1" value={this.state.apiKey} onChange={this.handleApikey} />
                       </label>
                     </p>
 
-                    <p className="ds-u-margin--0">
+                    <p className="ds-u-margin--0 preview__label ds-u-font-size--base ds-u-font-style--normal">
                       <label> OpenProject Base Url
                         <input type="text" className="ds-c-field ds-u-border--1" value={this.state.baseUrl} onChange={this.handleBaseUrl} />
                       </label>
                     </p>
-                    
                     <input type="button" value="Save Settings" className="ds-u-margin--0 ds-c-button ds-c-button--primary" onClick={this.saveSetting} />
                     {this.state.messageApiKey != '' ?
                       <div className="ds-u-margin-top--1 ds-c-alert ds-c-alert--success">
@@ -566,11 +643,11 @@ export default class Customform extends Component {
                         </div>
                       </div> : null}
                   </div>
-                </div>
+                </div> */}
               </div> : null}
             </div>
-            <div className="ds-u-padding--0 ds-l-col--1 ds-u-border-left--1">
-              <div >
+            <div className={[style.sideBar, 'ds-u-padding--0 ds-l-col--1 ds-u-border-left--1'].join(' ')}>
+              <div>
                 <div>
                   <ul className={[style.verticalNavCustom, 'ds-c-vertical-nav'].join(' ')}>
                     <li className={this.state.showEdit ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
@@ -611,7 +688,7 @@ export default class Customform extends Component {
           </div>
             <hr className="on ds-u-fill--gray-lightest" />
             <div className="ds-u-text-align--center ds-u-margin-top--4">
-              <div claasName="ds-u-margin-top--4"><a className="ds-c-button ds-c-button--primary" target="_blank" href={APIDATA.OPENPROJECT_DOMAIN}>Sign in</a></div>
+              <div claasName="ds-u-margin-top--4"><a className="ds-c-button ds-c-button--primary" onClick={this.signinTab}  >Sign in</a></div>
               <div className="ds-u-font-style--italic ds-u-margin-top--4 ds-u-margin-bottom--2">
                 After you’ve signed in, <br />please click the extension button again.
             </div>
@@ -627,7 +704,7 @@ class Popup extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      src: this.props.selectedImage,
+      src: this.props.selectedImage.length > 0 ? this.props.selectedImage : null,
       probs: this.props,
       articleTab: true,
       customTab: false,
@@ -697,10 +774,10 @@ class Popup extends React.Component {
               </button>
           </h4>
           <div id="featurePage" className="usa-accordion__content usa-prose">
-            <p className="ds-u-margin-top--0">
+            {this.state.src ? <p className="ds-u-margin-top--0">
               <img src={this.state.src} className={style.ogImages}></img>
               <span className={[style.imgSizeDisplay, 'preview__label ds-u-font-size--base ds-u-font-style--normal'].join(' ')}>{this.state.imgHeight} x {this.state.imgWidth} px</span>
-            </p>
+            </p> : null}
             <Tabs>
               <TabPanel id="article" className={style.imageGallery} tab="Article images">
                 <div className="ds-u-clearfix ">

@@ -1,11 +1,11 @@
 {
-    "ops.infra.lectio.cc" : {
+    "op.infra.lectio.cc" : {
         "natureOfInstance": "Instance",
         "extensionUI" : {
             "displayName": "Netspective Lectio"            
         },
         "api" : {
-            "baseURL": "https://ops.infra.lectio.cc/api/v3"
+            "baseURL": "https://op.infra.lectio.cc/api/v3"
         },
         "projects" : {
             "include" : [
@@ -18,6 +18,26 @@
             }
         }
     },
+    "openproject-devl.netspective.com" : {
+        "natureOfInstance": "Instance",
+        "extensionUI" : {
+            "displayName": "Netspective Lectio"            
+        },
+        "api" : {
+            "baseURL": "https://openproject-devl.netspective.com/api/v3"
+        },
+        "projects" : {
+            "include" : [
+                { "name": ".*" }
+            ],
+            "exclude" : [],
+            "default" : "",
+            "dynamicConfig" : {
+                "projectWikiPageContent": "Netspective Lectio Browser Extension Project Configuration"
+            }
+        }
+    },
+    
     "plan.netspective.com" : {
         "natureOfInstance": "Instance", 
         "extensionUI" : {

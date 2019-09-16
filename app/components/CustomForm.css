@@ -256,7 +256,7 @@
 }
 .textareaDesc{
   border: none;
-  min-height: 193px;
+  min-height: 210px;
   padding:0px 3%;
   white-space: normal;
   display: block;
@@ -296,6 +296,21 @@
   width: 30%;
   text-align: center;
   top: 70px;
+}
+.sectionContent{    
+  height: 100vh;
+  position: relative;
+  padding-bottom: 60px;
+}
+.sectionContent .sucessBlock{bottom:10px;}
+.sideBar{
+  height: 100vh;
+}
+.ogImageContainer{
+  height: 75px;
+}
+.imageGallery img{
+  cursor: pointer;
 }
 .ds-c-alert{
   background-position: 16px 7px !important;

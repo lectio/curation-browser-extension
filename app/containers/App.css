@@ -8,7 +8,7 @@
   background: #ffffff;
   border: 1px solid #ddd;
   padding-bottom: 0px;
-  height: 465px;
+  height: 487px;
   overflow: hidden;
 }
 .normal:after, .normal:before {
@@ -70,4 +70,3 @@
   -ms-text-rendering: optimizeLegibility;
   text-rendering: optimizeLegibility;
 }
-

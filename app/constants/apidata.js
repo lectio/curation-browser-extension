@@ -3,7 +3,8 @@ export const BASE_URL = 'https://op.infra.lectio.cc'
 export const API_URL = '/api/v3';
 export const PROJECT_ID = '3';
 export const DOMAIN_NAME = 'op.infra.lectio.cc';
-export const SESSION_DOMAIN = 'http://releases.openproject.com';
+
+export const cleanUrlField = 'customField2';
 
 // export const SITE_URL = 'https://openproject-devl.netspective.com/projects/brief-health/work_packages/';
 // export const BASE_URL = 'https://openproject-devl.netspective.com/api/v3';
