@@ -70,3 +70,6 @@
   -ms-text-rendering: optimizeLegibility;
   text-rendering: optimizeLegibility;
 }
+.ds-c-alert{
+  background-position: 16px 7px !important;
+}
