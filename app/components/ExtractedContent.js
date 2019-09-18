@@ -1,6 +1,5 @@
-import React, { Component } from 'react';
+import React from 'react';
 // import style from './Extractedcontent.css';
-import { Map } from 'immutable';
 import JSONPretty from 'react-json-pretty';
 
 export default class ExtractedContent extends React.Component {
