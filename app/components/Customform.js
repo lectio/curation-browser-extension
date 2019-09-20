@@ -4,6 +4,9 @@ import ExtractedContent from './ExtractedContent';
 import Popup from './Popup';
 import * as APIDATA from '../constants/apidata';
 import logo from '../../chrome/assets/img/logo-small.png';
+import * as INSTANCE from '../constants/config.json';
+
+const urlExists = require('url-exists');
 
 export default class Customform extends Component {
   constructor(props) {
@@ -18,6 +21,7 @@ export default class Customform extends Component {
       multiSelect: [],
       optionClicked: [],
       url: '',
+      cleanUrl: '',
       allImages: [],
       showPopup: false,
       selectedImage: -1,
@@ -39,16 +43,20 @@ export default class Customform extends Component {
       fetchingContents: true,
       apiKey: '',
       messageApiKey: '',
-      messageApiKeyErr: '',
+      extLocalConfigName: '',
       baseUrl: '',
       cookie: '',
       duplicateMessage: '',
       parentId: null,
-      favIcon: null
+      favIcon: null,
+      extConfig: [],
+      contentType: [],
+      contentTypeSelected:'',
     };
     this.handleChange = this.handleChange.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
     this.handleSummary = this.handleSummary.bind(this);
+    this.handleUrl = this.handleUrl.bind(this);
     this.activateTabs = this.activateTabs.bind(this);
     this.saveSetting = this.saveSetting.bind(this);
     this.authenticate = this.authenticate.bind(this);
@@ -57,7 +65,12 @@ export default class Customform extends Component {
     this.getCookies = this.getCookies.bind(this);
   }
   componentDidMount() {
-    this.authenticate();
+    this.authenticate();  
+    
+    if (this.state.isLogin) {
+      this.getExtLocalConfig();
+    }
+
     let selectedContent = '';
     chrome.tabs.executeScript({
       code: 'window.getSelection().toString();'
@@ -68,7 +81,8 @@ export default class Customform extends Component {
     });
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const tabUrl = tabs[0].url;
-      this.setState({ url: tabUrl });
+      this.setState({ url: tabUrl, cleanUrl: this.generateCleanURL(tabUrl) });
+
       const x = new XMLHttpRequest();
       x.open('GET', tabUrl);
       x.responseType = 'document';
@@ -79,6 +93,8 @@ export default class Customform extends Component {
           let title = doc.querySelector('meta[property="og:title"]');
           let desc = doc.querySelector('meta[property="og:description"]');
           let image = doc.querySelector('meta[property="og:image"]');
+          let dcTitle = doc.querySelector('meta[name="DC.Title"]');
+          title = title ? title : dcTitle;
           const ogData = [];
           const og = doc.querySelectorAll("meta[property^='og']");
           let favicon;
@@ -107,34 +123,47 @@ export default class Customform extends Component {
             if (x.status === 200) {
               this.findDuplicate();
               let baseUrl = this.state.url.split('/');
-              baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
+              let readMoreurl = `${baseUrl[2]}`;
+              readMoreurl = readMoreurl.replace('www.', '');
+              const readMore = "\n\n[Read on " + readMoreurl + "]\n(" + this.state.cleanUrl + ")";
               const pattern = /^((http|https|www):\/\/)/;
-              if (desc) {
+              if (desc && selectedContent === '') {
                 desc = desc.getAttribute('content');
+                desc = desc + readMore;
+                this.setState({ summary: desc });
+              } else {
                 if (selectedContent !== '') {
-                  this.setState({ summary: selectedContent });
-                } else {
-                  this.setState({ summary: desc });
+                  selectedContent = selectedContent + readMore;
                 }
+                this.setState({ summary: selectedContent });
               }
               if (title) {
                 title = title.getAttribute('content');
-                title = title.split(/[|]/);
+                title = title.split(/[»|\-\-]/);
                 title = title[0];
                 this.setState({ value: title });
               }
               if (image) {
                 image = image.getAttribute('content');
                 if (!pattern.test(image)) {
+                  baseUrl = baseUrl[0] + "//" + baseUrl[2];
                   image = baseUrl + image;
                 }
                 this.setState({ image });
               }
               if (favicon) {
-                if (!pattern.test(favicon)) {
+                if (favicon.startsWith('//')) {
+                  favicon = baseUrl[0] + favicon;
+                } else if (!pattern.test(favicon)) {
+                  baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
                   favicon = baseUrl + favicon;
                 }
-                this.setState({ favIcon: favicon });
+                const self = this;
+                urlExists(favicon, function (err, exists) {
+                  if (exists) {
+                    self.setState({ favIcon: favicon });
+                  }
+                });
               }
             } else {
               this.setState({ fetchingContents: false });
@@ -170,8 +199,8 @@ export default class Customform extends Component {
     return (url.match(/\.(jpeg|jpg|gif|png)$/) != null);
   }
   findDuplicate() {
-    const cleanUrl = this.generateCleanURL(this.state.url);
-    const filterParam = `filters=[{"${APIDATA.cleanUrlField}":{"operator":"~","values":["${cleanUrl}"]}},{"${APIDATA.sourceUrlField}":{"operator":"~","values":["${this.state.url}"]}}]`;
+    const cleanUrl = this.state.cleanUrl;
+    const filterParam = `filters=[{"${APIDATA.cleanUrlField}":{"operator":"~","values":["${encodeURI(cleanUrl)}"]}},{"${APIDATA.sourceUrlField}":{"operator":"~","values":["${encodeURI(this.state.url)}"]}}]`;
     const filterData = {
       method: 'GET',
       credentials: 'include',
@@ -184,7 +213,7 @@ export default class Customform extends Component {
     fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/projects/${APIDATA.PROJECT_ID}/work_packages/?${filterParam}`, filterData)
       .then((response) => response.json()).then((responseData) => {
         this.setState({ fetchingContents: false });
-        if (typeof (responseData._embedded.elements) !== 'undefined') {
+        if (typeof (responseData._embedded) !== 'undefined') {
           const duplicateElements = responseData._embedded.elements;
           if (duplicateElements.length > 0) {
             const lowest = duplicateElements[0].id;
@@ -204,10 +233,13 @@ export default class Customform extends Component {
     this.setState({ value: event.target.value });
   }
   handleUrl(event) {
-    this.setState({ url: event.target.value });
+    this.setState({ cleanUrl: event.target.value });
   }
   handleSummary(event) {
     this.setState({ summary: event.target.value });
+  }
+  handleContentType(event){
+    this.setState({ contentTypeSelected: event.target.value });
   }
   handleApikey = (e) => {
     this.setState({ apiKey: e.target.value });
@@ -264,7 +296,39 @@ export default class Customform extends Component {
       }
     });
   }
-  authenticate() {
+  setConfigVal = () => new Promise(((resolve) => {
+    Object.keys(INSTANCE).forEach((key) => {
+      // eslint-disable-next-line no-console
+      if (key === APIDATA.DOMAIN_NAME) {
+        const obj = {};
+        obj.config = INSTANCE[key];
+        chrome.storage.local.set(obj);
+      }
+    });
+
+    chrome.storage.local.get('config', async (items) => {
+      resolve(items.config);
+    });
+  }));
+
+  getExtLocalConfig = async () => {
+    const config = await this.setConfigVal();
+    this.setState({ extLocalConfigName: config.projects.dynamicConfig.extnLocalConfig });
+
+    
+    const jsData = await fetch(`/extLocalConfig/${config.projects.dynamicConfig.extnLocalConfig}`).then((response) => {
+      return response.json();
+    }).then((responsoData) => {
+      this.setState({ extConfig: responsoData });  
+      this.setState({ contentType: responsoData.contentType[0].workPackage });
+      this.setState({ contentTypeSelected: responsoData.contentType[0].workPackage[0].id });
+    }).catch((e)=>{
+      console.log('Json error',e);
+    });
+
+    
+  }
+  authenticate = () => new Promise((resolve) => {
     const authdata = {
       method: 'GET',
       credentials: 'include',
@@ -284,37 +348,33 @@ export default class Customform extends Component {
             this.setState({ showEdit: false });
             this.setState({ showSettings: true });
             this.setState({ authenticate: false });
+            chrome.storage.local.clear();
           }
-          return response.json();
+          resolve(response.json());
         }).catch(() => {
           this.setState({ isLogin: false });
           this.setState({ showEdit: false });
           this.setState({ showSettings: true });
           this.setState({ authenticate: false });
+          chrome.storage.local.clear();
         });
     });
-  }
+  });
   handleSubmit(event) {
     event.preventDefault();
     this.setState({ loader: true });
-    const cleanUrl = this.generateCleanURL(this.state.url);
-    let baseUrl = this.state.url.split('/');
-    baseUrl = `${baseUrl[2]}`;
-    baseUrl = baseUrl.replace('www.', '');
-    const readMore = "<br><br>Read on <a target='_blank' href=" + cleanUrl + ">" + baseUrl + " </a>";
-    const summary = this.state.summary.concat(readMore);
     const params = JSON.stringify({
       subject: this.state.value,
       description: {
         format: 'markdown',
-        raw: summary,
+        raw: this.state.summary,
         html: ''
       },
-      [APIDATA.sourceUrlField]: this.state.url,
-      [APIDATA.cleanUrlField]: cleanUrl,
+      [APIDATA.sourceUrlField]: encodeURI(this.state.url),
+      [APIDATA.cleanUrlField]: encodeURI(this.state.cleanUrl),
       _links: {
         type: {
-          href: '/api/v3/types/8',
+          href: `/api/v3/types/${this.state.contentTypeSelected}`,
           title: 'Post'
         },
       }
@@ -352,7 +412,7 @@ export default class Customform extends Component {
         }
         if (this.state.favIcon) {
           this.toDataUrl(this.state.favIcon, (base64Content) => {
-            const fileName = 'Fav Icon.png';
+            const fileName = 'Curated Source FavIcon.png';
             this.uploadImage(webPackageId, fileName, base64Content);
           });
         }
@@ -410,8 +470,10 @@ export default class Customform extends Component {
       if (this.readyState == 4 && this.status == 200) {
         callback(this.response);
         const img = document.getElementById('img');
-        const urlObj = window.URL || window.webkitURL;
-        img.src = urlObj.createObjectURL(this.response);
+        if (img) {
+          const urlObj = window.URL || window.webkitURL;
+          img.src = urlObj.createObjectURL(this.response);
+        }
       }
     };
     xhr.open('GET', url);
@@ -553,11 +615,17 @@ export default class Customform extends Component {
                         : null}
                     </p>
                     <hr className="on ds-u-fill--gray-lightest" />
-                    {this.state.fetchingContents ? null :
-                      <div className="ds-l-row ds-u-margin-left--0">
-                        <div className={[style.favIcon, 'ds-l-col--auto'].join(' ')}>{this.state.favIcon ? <img src={this.state.favIcon} width="18px" height="18px" alt="favIcon" /> : null}</div>
-                        <div className={[style.cleanUrl, 'ds-l-col--10 ds-u-padding-x--0'].join(' ')}><input type="text" className={this.state.parentId ? [style.textareaLink, 'preview__label ds-u-font-style--normal ds-u-color--white on ds-u-fill--secondary-dark ds-u-padding-x--1'].join(' ') : [style.textareaLink, 'preview__label ds-u-font-style--normal'].join(' ')} value={this.generateCleanURL(this.state.url)} onChange={this.handleUrl} style={this.state.parentId ? { height: '20px' } : { height: '18px' }} /></div>
-                      </div>}
+                    {this.state.fetchingContents ? null : <div className="ds-l-row ds-u-margin-left--0">
+                      <div className={[style.favIcon, 'ds-l-col--auto'].join(' ')}>{this.state.favIcon ? <img src={this.state.favIcon} width="18px" height="18px" alt="favIcon" /> : null}</div>
+                      <div className={[style.cleanUrl, 'ds-l-col--10 ds-u-padding-x--0'].join(' ')}><input type="text" className={this.state.parentId ? [style.textareaLink, 'preview__label ds-u-font-style--normal ds-u-color--white on ds-u-fill--secondary-dark ds-u-padding-x--1'].join(' ') : [style.textareaLink, 'preview__label ds-u-font-style--normal'].join(' ')} value={this.state.cleanUrl} onChange={this.handleUrl} style={this.state.parentId ? { height: '20px' } : { height: '18px' }} /></div>
+                    </div>}
+                    <hr className="on ds-u-fill--gray-lightest ds-u-margin-bottom--0" />
+                    {this.state.fetchingContents ? null : <div className="ds-l-row"><div className="ds-l-col--11"><select className="ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1 ds-u-margin-x--1 ds-u-margin-bottom--0" value={this.state.contentTypeSelected} onChange={e => this.setState({ contentTypeSelected: e.target.value })}>
+                      {this.state.contentType.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
+                    </select></div></div>
+                    }
+
+
                     <hr className="on ds-u-fill--gray-lightest ds-u-margin-bottom--0" />
                     {this.state.fetchingContents ? null : <div className={style.sucessBlock}>
                       {this.state.loader ? <button className="ds-u-margin-left--1 ds-u-margin-top--1 ds-c-button ds-c-button--primary">

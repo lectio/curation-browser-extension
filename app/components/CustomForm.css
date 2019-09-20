@@ -275,7 +275,7 @@
   overflow-x: hidden;
 }
 .imageGallery{
-  height: 195px;
+  height: 315px;
   overflow-y: scroll;
   padding-bottom: 25px;
 }

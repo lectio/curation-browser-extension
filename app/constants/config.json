@@ -14,7 +14,8 @@
             "exclude" : [],
             "default" : "",
             "dynamicConfig" : {
-                "projectWikiPageContent": "Netspective Lectio Browser Extension Project Configuration"
+                "projectWikiPageContent": "Netspective Lectio Browser Extension Project Configuration",
+                "extnLocalConfig":  "netspective_lectio.json"
             }
         }
     },
@@ -28,12 +29,13 @@
         },
         "projects" : {
             "include" : [
-                { "name": ".*" }
+                { "name": "lectio","id": 3 }
             ],
             "exclude" : [],
             "default" : "",
             "dynamicConfig" : {
-                "projectWikiPageContent": "Netspective Lectio Browser Extension Project Configuration"
+                "projectWikiPageContent": "Netspective Lectio Browser Extension Project Configuration",
+                "extnLocalConfig":  "openproject_devl.json"
             }
         }
     },

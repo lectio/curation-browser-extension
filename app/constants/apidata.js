@@ -11,6 +11,6 @@ export const sourceUrlField = 'customField1';
 // export const API_URL = '/api/v3';
 // export const PROJECT_ID = '3';
 // export const DOMAIN_NAME = 'openproject-devl.netspective.com';
-// export const cleanUrlField = 'customField2';
-// export const sourceUrlField = 'customField8';
+// export const cleanUrlField = 'customField8';
+// export const sourceUrlField = 'customField2';
 

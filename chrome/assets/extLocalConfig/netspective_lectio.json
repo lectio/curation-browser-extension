@@ -1,0 +1,91 @@
+{
+    "natureOfProject": "Account",
+    "extensionUI": {
+        "displayName": "Account Lectio"
+    },
+    "campaigns": [
+        {
+            "instanceName": "op.infra.lectio.cc",
+            "projectName": "Lectio",
+            "workPackages": {
+                "hierarchy": [
+                    "Campaign Nature",
+                    "Campaign",
+                    "..."
+                ]
+            },
+            "include": [
+                {
+                    "name": ".*"
+                }
+            ],
+            "exclude": [],
+            "default": "",
+            "contentStore": {
+                "instanceName": "op.infra.lectio.cc",
+                "projectName": "Lectio",
+                "workPackage": "Curated Content"
+            }
+        }
+    ],
+    "categories": [
+        {
+            "instanceName": "op.infra.lectio.cc",
+            "projectName": "Lectio",
+            "workPackages": {
+                "hierarchy": [
+                    "Category",
+                    "..."
+                ]
+            },
+            "include": [
+                {
+                    "name": ".*"
+                }
+            ],
+            "exclude": [],
+            "default": ""
+        }
+    ],
+    "tags": [
+        {
+            "instanceName": "op.infra.lectio.cc",
+            "projectName": "Lectio",
+            "workPackages": {
+                "hierarchy": [
+                    "Tag",
+                    "..."
+                ]
+            },
+            "include": [
+                {
+                    "name": ".*"
+                }
+            ],
+            "exclude": [],
+            "default": ""
+        }
+    ],
+    "contentType":  [
+        {
+            "workPackage": [
+            {
+                "name": "Curated Content",
+                "id": "8"
+            },
+            {
+                "name": "Curated Event",
+                "id": "14"
+            },
+            {
+                "name": "Curated Offering",
+                "id": "15"
+            },
+            {
+                "name": "Curated Recognition",
+                "id": "16"
+            }
+        ]
+    }
+]
+}

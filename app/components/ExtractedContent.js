@@ -12,7 +12,7 @@ export default class ExtractedContent extends React.Component {
   }
   render() {
     return (
-      <div className="ds-u-margin--0 ds-u-font-size--small" style={{ height: '392px' }}>
+      <div className="ds-u-margin--0 ds-u-font-size--small" style={{ height: '443px' }}>
         <JSONPretty id="json-pretty" data={this.props.jsonData} contentEditable={true} ></JSONPretty>
       </div>
     );
