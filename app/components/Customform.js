@@ -51,7 +51,7 @@ export default class Customform extends Component {
       favIcon: null,
       extConfig: [],
       contentType: [],
-      contentTypeSelected:'',
+      contentTypeSelected: '',
     };
     this.handleChange = this.handleChange.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
@@ -65,8 +65,8 @@ export default class Customform extends Component {
     this.getCookies = this.getCookies.bind(this);
   }
   componentDidMount() {
-    this.authenticate();  
-    
+    this.authenticate();
+
     if (this.state.isLogin) {
       this.getExtLocalConfig();
     }
@@ -90,11 +90,29 @@ export default class Customform extends Component {
         e.preventDefault();
         const doc = x.response;
         if (doc) {
-          let title = doc.querySelector('meta[property="og:title"]');
-          let desc = doc.querySelector('meta[property="og:description"]');
+          const ogTitle = doc.querySelector('meta[property="og:title"]');
+          const ogDesc = doc.querySelector('meta[property="og:description"]');
+          let desc = '';
+          let title = '';
           let image = doc.querySelector('meta[property="og:image"]');
-          let dcTitle = doc.querySelector('meta[name="DC.Title"]');
-          title = title ? title : dcTitle;
+          const dcTitle = doc.querySelector('meta[name="DC.Title"]');
+          const metaDescription = doc.querySelector('meta[name="description"]');
+          const metaTitle = doc.querySelector('meta[name="title"]');
+          const titleTag = doc.querySelector('title').innerHTML;
+          if (ogTitle) {
+            title = ogTitle.getAttribute('content');
+          } else if (dcTitle && title === '') {
+            title = dcTitle.getAttribute('content');
+          } else if (metaTitle && title === '') {
+            title = metaTitle.getAttribute('content');
+          } else if (titleTag && title === '') {
+            title = titleTag;
+          }
+          if (ogDesc) {
+            desc = ogDesc.getAttribute('content');
+          } else if (metaDescription && desc === '') {
+            desc = metaDescription.getAttribute('content');
+          }
           const ogData = [];
           const og = doc.querySelectorAll("meta[property^='og']");
           let favicon;
@@ -113,7 +131,7 @@ export default class Customform extends Component {
           const meta = doc.getElementsByTagName('meta');
           let j = 0;
           for (j = 0; j < meta.length; j++) {
-            if (meta.item(j).name != '') {
+            if (meta.item(j).name !== '') {
               metaDataOb.push({ name: meta.item(j).name, content: meta.item(j).content });
             }
           }
@@ -125,10 +143,9 @@ export default class Customform extends Component {
               let baseUrl = this.state.url.split('/');
               let readMoreurl = `${baseUrl[2]}`;
               readMoreurl = readMoreurl.replace('www.', '');
-              const readMore = "\n\n[Read on " + readMoreurl + "]\n(" + this.state.cleanUrl + ")";
+              const readMore = "\n\n[Read on " + readMoreurl + "](" + this.state.cleanUrl + ")";
               const pattern = /^((http|https|www):\/\/)/;
               if (desc && selectedContent === '') {
-                desc = desc.getAttribute('content');
                 desc = desc + readMore;
                 this.setState({ summary: desc });
               } else {
@@ -138,8 +155,8 @@ export default class Customform extends Component {
                 this.setState({ summary: selectedContent });
               }
               if (title) {
-                title = title.getAttribute('content');
-                title = title.split(/[»|\-\-]/);
+                title = title.split('--');
+                title = title[0].split(/[»|]/);
                 title = title[0];
                 this.setState({ value: title });
               }
@@ -176,7 +193,7 @@ export default class Customform extends Component {
           }
           for (let i = 0; i < images.length; i++) {
             const img = images[i].src;
-            const res = img.match(/ajax|email|icon|FB|social|small|facebook|logo/gi);
+            const res = img.match(/ajax|email|icon|FB|social|facebook/gi);
             if ((res == null) && (srcList.indexOf(img) === -1)) {
               const validUrl = this.checkURL(img);
               if (validUrl) {
@@ -200,7 +217,7 @@ export default class Customform extends Component {
   }
   findDuplicate() {
     const cleanUrl = this.state.cleanUrl;
-    const filterParam = `filters=[{"${APIDATA.cleanUrlField}":{"operator":"~","values":["${encodeURI(cleanUrl)}"]}},{"${APIDATA.sourceUrlField}":{"operator":"~","values":["${encodeURI(this.state.url)}"]}}]`;
+    const filterByCleanUrl = `filters=[{"${APIDATA.cleanUrlField}":{"operator":"~","values":["${encodeURI(cleanUrl)}"]}}]`;
     const filterData = {
       method: 'GET',
       credentials: 'include',
@@ -210,21 +227,30 @@ export default class Customform extends Component {
         'X-Requested-With': 'XMLHttpRequest'
       }
     };
-    fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/projects/${APIDATA.PROJECT_ID}/work_packages/?${filterParam}`, filterData)
+    fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/projects/${APIDATA.PROJECT_ID}/work_packages/?${filterByCleanUrl}`, filterData)
       .then((response) => response.json()).then((responseData) => {
-        this.setState({ fetchingContents: false });
         if (typeof (responseData._embedded) !== 'undefined') {
           const duplicateElements = responseData._embedded.elements;
+          let duplicateMsg = '';
           if (duplicateElements.length > 0) {
             const lowest = duplicateElements[0].id;
-            const openProjectCleanUrl = duplicateElements[0][APIDATA.cleanUrlField];
-            let duplicateMsg = '';
-            if (openProjectCleanUrl === cleanUrl) {
-              duplicateMsg = `Clean URL duplicate of # ${lowest}`;
-            } else {
-              duplicateMsg = `Source URL duplicate of # ${lowest}`;
-            }
+            this.setState({ fetchingContents: false });
+            duplicateMsg = `Clean URL duplicate of # ${lowest}`;
             this.setState({ parentId: lowest, duplicateMessage: duplicateMsg });
+          } else {
+            const filterBySourceUrl = `filters=[{"${APIDATA.sourceUrlField}":{"operator":"~","values":["${encodeURI(this.state.url)}"]}}]`;
+            fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/projects/${APIDATA.PROJECT_ID}/work_packages/?${filterBySourceUrl}`, filterData)
+              .then((res) => res.json()).then((resData) => {
+                this.setState({ fetchingContents: false });
+                if (typeof (resData._embedded) !== 'undefined') {
+                  const duplicateElements = resData._embedded.elements;
+                  if (duplicateElements.length > 0) {
+                    const lowest = duplicateElements[0].id;
+                    duplicateMsg = `Source URL duplicate of # ${lowest}`;
+                    this.setState({ parentId: lowest, duplicateMessage: duplicateMsg });
+                  }
+                }
+              });
           }
         }
       });
@@ -238,7 +264,7 @@ export default class Customform extends Component {
   handleSummary(event) {
     this.setState({ summary: event.target.value });
   }
-  handleContentType(event){
+  handleContentType(event) {
     this.setState({ contentTypeSelected: event.target.value });
   }
   handleApikey = (e) => {
@@ -315,18 +341,18 @@ export default class Customform extends Component {
     const config = await this.setConfigVal();
     this.setState({ extLocalConfigName: config.projects.dynamicConfig.extnLocalConfig });
 
-    
+
     const jsData = await fetch(`/extLocalConfig/${config.projects.dynamicConfig.extnLocalConfig}`).then((response) => {
       return response.json();
     }).then((responsoData) => {
-      this.setState({ extConfig: responsoData });  
+      this.setState({ extConfig: responsoData });
       this.setState({ contentType: responsoData.contentType[0].workPackage });
       this.setState({ contentTypeSelected: responsoData.contentType[0].workPackage[0].id });
-    }).catch((e)=>{
-      console.log('Json error',e);
+    }).catch((e) => {
+      console.log('Json error', e);
     });
 
-    
+
   }
   authenticate = () => new Promise((resolve) => {
     const authdata = {
