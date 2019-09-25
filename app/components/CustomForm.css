@@ -402,3 +402,6 @@
   max-width: 90% !important;
   flex: 0 0 90% !important;
 }
+.accordContent{
+  height: 95%;
+}

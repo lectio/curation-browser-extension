@@ -1,12 +1,15 @@
 import React, { Component } from 'react';
+import ReactHtmlParser from 'react-html-parser';
 import style from './CustomForm.css';
 import ExtractedContent from './ExtractedContent';
+import AutoClassification from './AutoClassification';
 import Popup from './Popup';
 import * as APIDATA from '../constants/apidata';
 import logo from '../../chrome/assets/img/logo-small.png';
 import * as INSTANCE from '../constants/config.json';
 
 const urlExists = require('url-exists');
+const striptags = require('striptags');
 
 export default class Customform extends Component {
   constructor(props) {
@@ -39,6 +42,7 @@ export default class Customform extends Component {
       siteUrl: '',
       isLogin: true,
       metaDataJSON: '',
+      domContents: '',
       loader: false,
       fetchingContents: true,
       apiKey: '',
@@ -52,6 +56,13 @@ export default class Customform extends Component {
       extConfig: [],
       contentType: [],
       contentTypeSelected: '',
+      doc: '',
+      domTitle: '',
+      domExcerpt: '',
+      domByline: '',
+      autoClassificationData: [],
+      showAutoClassificationTab: false,
+
     };
     this.handleChange = this.handleChange.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
@@ -63,6 +74,7 @@ export default class Customform extends Component {
     this.signinTab = this.signinTab.bind(this);
     this.checkURL = this.checkURL.bind(this);
     this.getCookies = this.getCookies.bind(this);
+    this.getMeshData = this.getMeshData.bind(this);
   }
   componentDidMount() {
     this.authenticate();
@@ -79,6 +91,7 @@ export default class Customform extends Component {
         selectedContent = selection[0];
       }
     });
+
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const tabUrl = tabs[0].url;
       this.setState({ url: tabUrl, cleanUrl: this.generateCleanURL(tabUrl) });
@@ -89,6 +102,7 @@ export default class Customform extends Component {
       x.onload = (e) => {
         e.preventDefault();
         const doc = x.response;
+
         if (doc) {
           const ogTitle = doc.querySelector('meta[property="og:title"]');
           const ogDesc = doc.querySelector('meta[property="og:description"]');
@@ -146,11 +160,11 @@ export default class Customform extends Component {
               const readMore = "\n\n[Read on " + readMoreurl + "](" + this.state.cleanUrl + ")";
               const pattern = /^((http|https|www):\/\/)/;
               if (desc && selectedContent === '') {
-                desc = desc + readMore;
+                desc += readMore;
                 this.setState({ summary: desc });
               } else {
                 if (selectedContent !== '') {
-                  selectedContent = selectedContent + readMore;
+                  selectedContent += readMore;
                 }
                 this.setState({ summary: selectedContent });
               }
@@ -176,7 +190,7 @@ export default class Customform extends Component {
                   favicon = baseUrl + favicon;
                 }
                 const self = this;
-                urlExists(favicon, function (err, exists) {
+                urlExists(favicon, (err, exists) => {
                   if (exists) {
                     self.setState({ favIcon: favicon });
                   }
@@ -202,6 +216,19 @@ export default class Customform extends Component {
             }
           }
           this.setState({ allImages: srcList });
+          const article = new Readability(doc).parse();
+          this.setState({
+            doc: doc
+          });
+          if (article) {
+            this.setState({
+              domContents: article.content,
+              domTitle: article.title,
+              domExcerpt: article.excerpt,
+              domByline: article.byline
+            });
+          } 
+          this.getMeshData();
         } else {
           this.setState({ fetchingContents: false });
         }
@@ -216,8 +243,9 @@ export default class Customform extends Component {
     return (url.match(/\.(jpeg|jpg|gif|png)$/) != null);
   }
   findDuplicate() {
+
     const cleanUrl = this.state.cleanUrl;
-    const filterByCleanUrl = `filters=[{"${APIDATA.cleanUrlField}":{"operator":"~","values":["${encodeURI(cleanUrl)}"]}}]`;
+    const filterByCleanUrl = `filters=[{"${APIDATA.cleanUrlField}":{"operator":"~","values":["${encodeURIComponent(cleanUrl)}"]}}]`;
     const filterData = {
       method: 'GET',
       credentials: 'include',
@@ -238,7 +266,7 @@ export default class Customform extends Component {
             duplicateMsg = `Clean URL duplicate of # ${lowest}`;
             this.setState({ parentId: lowest, duplicateMessage: duplicateMsg });
           } else {
-            const filterBySourceUrl = `filters=[{"${APIDATA.sourceUrlField}":{"operator":"~","values":["${encodeURI(this.state.url)}"]}}]`;
+            const filterBySourceUrl = `filters=[{"${APIDATA.sourceUrlField}":{"operator":"~","values":["${encodeURIComponent(this.state.url)}"]}}]`;
             fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/projects/${APIDATA.PROJECT_ID}/work_packages/?${filterBySourceUrl}`, filterData)
               .then((res) => res.json()).then((resData) => {
                 this.setState({ fetchingContents: false });
@@ -254,6 +282,32 @@ export default class Customform extends Component {
           }
         }
       });
+  }
+
+  getMeshData = (e) => {
+
+    const x = new XMLHttpRequest();
+    x.open('POST', 'https://meshb.nlm.nih.gov/api/MOD');
+    x.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    x.responseType = 'json';
+    x.onload = (e) => {
+      e.preventDefault();
+      const doc = x.response;
+      console.log(doc);
+      this.setState({ autoClassificationData: { meshData: JSON.parse(doc.body) } } );
+      this.setState({ meshData: JSON.parse(doc.body) } );
+      this.setState({ showAutoClassificationTab : true});
+      console.log('http', this.state.autoClassificationData);
+      const parser = new DOMParser();
+      
+      console.log(striptags(this.state.domContents, [], '\n'));
+      
+    };
+    x.onerror = (e) => {
+      throw e;
+    };
+    const text = striptags(this.state.domContents, [], '\n')
+    x.send(JSON.stringify({ "input" : text  }));
   }
   handleChange(event) {
     this.setState({ value: event.target.value });
@@ -396,8 +450,8 @@ export default class Customform extends Component {
         raw: this.state.summary,
         html: ''
       },
-      [APIDATA.sourceUrlField]: encodeURI(this.state.url),
-      [APIDATA.cleanUrlField]: encodeURI(this.state.cleanUrl),
+      [APIDATA.sourceUrlField]: encodeURIComponent(this.state.url),
+      [APIDATA.cleanUrlField]: encodeURIComponent(this.state.cleanUrl),
       _links: {
         type: {
           href: `/api/v3/types/${this.state.contentTypeSelected}`,
@@ -433,6 +487,7 @@ export default class Customform extends Component {
         this.setState({ loader: false });
         this.uploadOgData(webPackageId);
         this.uploadMetaData(webPackageId);
+        this.uploadMeshData(webPackageId);
         if (this.state.parentId) {
           this.createRelation(webPackageId);
         }
@@ -547,6 +602,25 @@ export default class Customform extends Component {
     const fr = new FileReader();
     fr.readAsText(ogFile);
     const databody = JSON.stringify({ fileName: 'Curated MetaData.json', description: { raw: 'A cute kitty, cuddling with its friends!' } });
+    const formBody = new FormData();
+    formBody.append('metadata', databody);
+    formBody.append('file', ogFile, 'ogData.json');
+    const authdata = {
+      method: 'POST',
+      body: formBody,
+      credentials: 'include',
+      headers: {
+        // 'Authorization': 'Basic ' + btoa('apikey:' + this.state.apiKey),
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    };
+    fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/work_packages/${id}/attachments`, authdata);
+  }
+  uploadMeshData(id) {
+    const ogFile = new Blob([JSON.stringify(this.state.meshData)], { type: 'application/json' });
+    const fr = new FileReader();
+    fr.readAsText(ogFile);
+    const databody = JSON.stringify({ fileName: 'PubMed_Medlines_Similar_Articles.json', description: { raw: 'A cute kitty, cuddling with its friends!' } });
     const formBody = new FormData();
     formBody.append('metadata', databody);
     formBody.append('file', ogFile, 'ogData.json');
@@ -676,6 +750,9 @@ export default class Customform extends Component {
                 </div>
                 : null}
               {this.state.showJsonTree ? <div id="panel-meta">
+                <ExtractedContent jsonData={this.state.metaDataJSON} articleData={this.state.domContents} articleTitle={this.state.domTitle} articleExcerpt={this.state.domExcerpt} articleByline={this.state.domByline} />
+              </div> : null}
+              {this.state.showShare ? <div id="panel-share">
                 <div className="usa-accordion site-accordion-code">
                   <h4 className="usa-accordion__heading site-accordion-code">
                     <button
@@ -683,16 +760,25 @@ export default class Customform extends Component {
                       aria-expanded="true"
                       aria-controls="metaDataContent"
                     >
-                      Extracted meta data
+                      Auto Classification
                     </button>
                   </h4>
-                  <div id="metaDataContent" className="usa-accordion__content usa-prose">
-                    <ExtractedContent jsonData={this.state.metaDataJSON} />
-                  </div>
-                </div>
-
+                  {this.state.showAutoClassificationTab ?
+                    <div id="metaDataContent" className="usa-accordion__content usa-prose">
+                      <div className="ds-u-margin-left--1 ds-u-font-size--small" style={{ height: '395px' }}>
+                        <h4>NIH Medical Subjects Heading (MeSH)</h4>
+                        { this.state.autoClassificationData.meshData.MoD_Raw.Term_List.map(type => <div><label><input type="checkbox" value={type.term}  /><span>{type.Term}</span>
+                        </label></div>)
+                        }
+                      </div>
+                    </div>
+                    :
+                    <button className="ds-u-margin-left--1 ds-u-margin-top--1 ds-c-button ds-c-button--primary">
+                      <span className="ds-c-spinner ds-c-spinner--small ds-c-spinner--inverse" aria-valuetext="Fetching Data" role="progressbar" /> Fetching Data...
+                    </button>
+                  }
+                </div>    
               </div> : null}
-              {this.state.showShare ? <div id="panel-share"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
               {this.state.showAttachmentTab ? <div id="panel-attachment"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
               {this.state.showImgTab ? <div id="panel-img"><Popup
                 text="Close"

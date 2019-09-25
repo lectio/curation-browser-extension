@@ -5,3 +5,6 @@
 .jsonBody span{
     white-space: normal !important;
 }
+.accordContent{
+    height: 95%;
+}
