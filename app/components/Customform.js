@@ -1,15 +1,13 @@
 import React, { Component } from 'react';
-import ReactHtmlParser from 'react-html-parser';
 import style from './CustomForm.css';
 import ExtractedContent from './ExtractedContent';
-import AutoClassification from './AutoClassification';
+import Feedback from './Feedback';
 import Popup from './Popup';
 import * as APIDATA from '../constants/apidata';
 import logo from '../../chrome/assets/img/logo-small.png';
 import * as INSTANCE from '../constants/config.json';
 
 const urlExists = require('url-exists');
-const striptags = require('striptags');
 
 export default class Customform extends Component {
   constructor(props) {
@@ -299,9 +297,6 @@ export default class Customform extends Component {
       this.setState({ showAutoClassificationTab : true});
       console.log('http', this.state.autoClassificationData);
       const parser = new DOMParser();
-      
-      console.log(striptags(this.state.domContents, [], '\n'));
-      
     };
     x.onerror = (e) => {
       throw e;
@@ -450,8 +445,8 @@ export default class Customform extends Component {
         raw: this.state.summary,
         html: ''
       },
-      [APIDATA.sourceUrlField]: encodeURIComponent(this.state.url),
-      [APIDATA.cleanUrlField]: encodeURIComponent(this.state.cleanUrl),
+      [APIDATA.sourceUrlField]: this.state.url,
+      [APIDATA.cleanUrlField]: this.state.cleanUrl,
       _links: {
         type: {
           href: `/api/v3/types/${this.state.contentTypeSelected}`,
@@ -788,7 +783,7 @@ export default class Customform extends Component {
                 onChangeValue={this.handleChangeValue}
               />
               </div> : null}
-              {this.state.showMsgTab ? <div id="panel-msg"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
+              {this.state.showMsgTab ? <div id="panel-msg"><Feedback siteUrl={this.state.url}/></div> : null}
               {this.state.showNotificationTab ? <div id="panel-notification"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
               {this.state.showSettings ? <div id="panel-notification">
                 <p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p>

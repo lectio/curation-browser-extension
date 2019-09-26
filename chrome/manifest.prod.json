@@ -18,6 +18,6 @@
   "background": {
     "page": "background.html"
   },
-  "permissions": [ "contextMenus", "tabs", "storage", "https://github.com/*","https://openproject-devl.netspective.com/*","activeTab","https://*/","http://*/","cookies" ],
+  "permissions": [ "contextMenus", "tabs", "storage", "https://github.com/*","https://meshb.nlm.nih.gov/*","https://openproject-devl.netspective.com/*","activeTab","https://*/","http://*/","cookies" ],
   "content_security_policy": "default-src 'self';connect-src 'self' *; script-src 'self'; style-src * 'unsafe-inline'; img-src 'self' * data: https: http: blob:;font-src 'self' * data:;"
 }
