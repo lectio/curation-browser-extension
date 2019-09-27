@@ -719,8 +719,6 @@ export default class Customform extends Component {
                       {this.state.contentType.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
                     </select></div></div>
                     }
-
-
                     <hr className="on ds-u-fill--gray-lightest ds-u-margin-bottom--0" />
                     {this.state.fetchingContents ? null : <div className={style.sucessBlock}>
                       {this.state.loader ? <button className="ds-u-margin-left--1 ds-u-margin-top--1 ds-c-button ds-c-button--primary">
