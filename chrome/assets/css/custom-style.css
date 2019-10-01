@@ -1,0 +1,9 @@
+.ck-editor__editable_inline {
+    min-height: 230px !important;
+    max-height: 230px !important;
+}
+#readableContent .ck-editor__editable_inline {
+    min-height: 446px !important;
+    max-height: 446px !important;
+    padding-bottom: 20px !important;;
+}

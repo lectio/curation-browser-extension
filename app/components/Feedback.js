@@ -9,9 +9,12 @@ export default class Feedback extends React.Component {
       feedbackId: '',
       webUrl: '',
       message: '',
-      type: 'Bug',
-      subject: 'Subject',
-      description: ''
+      subject: '',
+      description: '',
+      osName: '',
+      browser: '',
+      browserVersion: '',
+      ipAddress: ''
     };
     this.handleType = this.handleType.bind(this);
     this.handleSubject = this.handleSubject.bind(this);
@@ -46,16 +49,21 @@ export default class Feedback extends React.Component {
     } else if (!os && /Linux/.test(platform)) {
       os = 'Linux';
     }
-
-    let telemetryData = `Url: ${  this.props.siteUrl  }\n\n` + `Os: ${  os}`;
-    telemetryData = `${telemetryData  }\n\n` + `Browser name: ${  browserName  }\n` + `Browser Version: ${  version}`;
-
+    let descriptionData = `* (Clean URL)[${this.props.cleanUrl}]\n`;
+    descriptionData = `${descriptionData}* (Source URL)[${this.props.siteUrl}]`;
+    this.setState({
+      description: descriptionData,
+      osName: os,
+      browser: browserName,
+      browserVersion: version
+    });
     fetch('https://api.ipify.org/?format=json')
       .then(response => response.json())
       .then((resData) => {
         const ip = resData.ip;
-        telemetryData = `${telemetryData}\n\n IP Address: ${ip}`;
-        this.setState({ description: telemetryData });
+        this.setState({
+          ipAddress: ip
+        });
       });
   }
   handleType(event) {
@@ -102,6 +110,31 @@ export default class Feedback extends React.Component {
         return response.json();
       }).then((catdata) => {
         const webPackageId = catdata.id;
+        const manifestData = chrome.runtime.getManifest();
+        const telemetryInfo = {
+          'Extension Version': manifestData.version,
+          'Os Name': this.state.osName,
+          'Browser Name': this.state.browser,
+          'Browser Version': this.state.browserVersion,
+          'IP Address': this.state.ipAddress
+        };
+        const telemetryData = new Blob([JSON.stringify(telemetryInfo)], { type: 'application/json' });
+        const fr = new FileReader();
+        fr.readAsText(telemetryData);
+        const databody = JSON.stringify({ fileName: 'Curated Telemetry.json', description: { raw: 'Telemetry information!' } });
+        const formBody = new FormData();
+        formBody.append('metadata', databody);
+        formBody.append('file', telemetryData, 'telemetryData.json');
+        const authdata = {
+          method: 'POST',
+          body: formBody,
+          credentials: 'include',
+          headers: {
+            // 'Authorization': 'Basic ' + btoa('apikey:' + this.state.apiKey),
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        };
+        fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/work_packages/${webPackageId}/attachments`, authdata);
         this.setState({ feedbackId: webPackageId });
         this.setState({ webUrl: APIDATA.SITE_URL });
         this.setState({ message: 'Feedback Submited ' });
@@ -113,19 +146,12 @@ export default class Feedback extends React.Component {
         <form onSubmit={this.handleSubmit}>
           <div className="ds-l-row ds-u-margin-top--2">
             <div className="ds-l-col">
-              <select className="ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1" value={this.state.type} onChange={this.handleType}>
-                <option value="bug">Bug</option>
-              </select>
+              <input type="text" className="ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1" name="Subject" placeholder="Subject" value={this.state.subject} onChange={this.handleSubject} required />
             </div>
           </div>
-          <div className="ds-l-row ds-u-margin-top--2">
+          <div className="ds-l-row  ds-u-margin-top--0">
             <div className="ds-l-col">
-              <input type="text" className="ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1" name="Subject" value={this.state.subject} onChange={this.handleSubject} />
-            </div>
-          </div>
-          <div className="ds-l-row  ds-u-margin-top--2">
-            <div className="ds-l-col">
-              <textarea className="ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1" name="Description" rows="17" value={this.state.description} onChange={this.handleDescription} />
+              <textarea className="ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1" name="Description" rows="25" value={this.state.description} onChange={this.handleDescription} />
             </div>
           </div>
           <hr className="on ds-u-fill--gray-lightest" />

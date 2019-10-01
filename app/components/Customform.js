@@ -3,6 +3,8 @@ import style from './CustomForm.css';
 import ExtractedContent from './ExtractedContent';
 import Feedback from './Feedback';
 import Popup from './Popup';
+import CKEditor from '@ckeditor/ckeditor5-react';
+import ClassicEditor from '@ckeditor/ckeditor5-build-classic';
 import * as APIDATA from '../constants/apidata';
 import logo from '../../chrome/assets/img/logo-small.png';
 import * as INSTANCE from '../constants/config.json';
@@ -55,12 +57,10 @@ export default class Customform extends Component {
       contentType: [],
       contentTypeSelected: '',
       doc: '',
-      domTitle: '',
-      domExcerpt: '',
-      domByline: '',
+      domInitial: '',
       autoClassificationData: [],
       showAutoClassificationTab: false,
-
+      mozilaReadability: ''
     };
     this.handleChange = this.handleChange.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
@@ -73,6 +73,7 @@ export default class Customform extends Component {
     this.checkURL = this.checkURL.bind(this);
     this.getCookies = this.getCookies.bind(this);
     this.getMeshData = this.getMeshData.bind(this);
+    this.contentChange = this.contentChange.bind(this);
   }
   componentDidMount() {
     this.authenticate();
@@ -155,13 +156,15 @@ export default class Customform extends Component {
               let baseUrl = this.state.url.split('/');
               let readMoreurl = `${baseUrl[2]}`;
               readMoreurl = readMoreurl.replace('www.', '');
-              const readMore = "\n\n[Read on " + readMoreurl + "](" + this.state.cleanUrl + ")";
+              const readMore = `\n\n[Read on ${readMoreurl}](${this.state.cleanUrl})`;
               const pattern = /^((http|https|www):\/\/)/;
               if (desc && selectedContent === '') {
+                desc += '<br>';
                 desc += readMore;
                 this.setState({ summary: desc });
               } else {
                 if (selectedContent !== '') {
+                  selectedContent += '<br>';
                   selectedContent += readMore;
                 }
                 this.setState({ summary: selectedContent });
@@ -175,7 +178,7 @@ export default class Customform extends Component {
               if (image) {
                 image = image.getAttribute('content');
                 if (!pattern.test(image)) {
-                  baseUrl = baseUrl[0] + "//" + baseUrl[2];
+                  baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
                   image = baseUrl + image;
                 }
                 this.setState({ image });
@@ -216,16 +219,21 @@ export default class Customform extends Component {
           this.setState({ allImages: srcList });
           const article = new Readability(doc).parse();
           this.setState({
-            doc: doc
+            doc
           });
           if (article) {
+            let domData = `<b style="color:blue;">Title: </b>${article.title}<br>`;
+            domData = `${domData}<b>Excerpt: </b>${article.excerpt}<br>`;
+            if (article.byline) {
+              domData = `${domData}<b>Byline: </b>${article.byline}<br>`;
+            }
+            domData += article.content;
             this.setState({
-              domContents: article.content,
-              domTitle: article.title,
-              domExcerpt: article.excerpt,
-              domByline: article.byline
+              mozilaReadability: article,
+              domContents: domData,
+              domInitial: domData,
             });
-          } 
+          }
           this.getMeshData();
         } else {
           this.setState({ fetchingContents: false });
@@ -241,7 +249,6 @@ export default class Customform extends Component {
     return (url.match(/\.(jpeg|jpg|gif|png)$/) != null);
   }
   findDuplicate() {
-
     const cleanUrl = this.state.cleanUrl;
     const filterByCleanUrl = `filters=[{"${APIDATA.cleanUrlField}":{"operator":"~","values":["${encodeURIComponent(cleanUrl)}"]}}]`;
     const filterData = {
@@ -254,7 +261,7 @@ export default class Customform extends Component {
       }
     };
     fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/projects/${APIDATA.PROJECT_ID}/work_packages/?${filterByCleanUrl}`, filterData)
-      .then((response) => response.json()).then((responseData) => {
+      .then(response => response.json()).then((responseData) => {
         if (typeof (responseData._embedded) !== 'undefined') {
           const duplicateElements = responseData._embedded.elements;
           let duplicateMsg = '';
@@ -266,7 +273,7 @@ export default class Customform extends Component {
           } else {
             const filterBySourceUrl = `filters=[{"${APIDATA.sourceUrlField}":{"operator":"~","values":["${encodeURIComponent(this.state.url)}"]}}]`;
             fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/projects/${APIDATA.PROJECT_ID}/work_packages/?${filterBySourceUrl}`, filterData)
-              .then((res) => res.json()).then((resData) => {
+              .then(res => res.json()).then((resData) => {
                 this.setState({ fetchingContents: false });
                 if (typeof (resData._embedded) !== 'undefined') {
                   const duplicateElements = resData._embedded.elements;
@@ -283,26 +290,23 @@ export default class Customform extends Component {
   }
 
   getMeshData = (e) => {
-
     const x = new XMLHttpRequest();
     x.open('POST', 'https://meshb.nlm.nih.gov/api/MOD');
-    x.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    x.setRequestHeader('Content-Type', 'application/json;charset=UTF-8');
     x.responseType = 'json';
     x.onload = (e) => {
       e.preventDefault();
       const doc = x.response;
-      console.log(doc);
-      this.setState({ autoClassificationData: { meshData: JSON.parse(doc.body) } } );
-      this.setState({ meshData: JSON.parse(doc.body) } );
-      this.setState({ showAutoClassificationTab : true});
-      console.log('http', this.state.autoClassificationData);
+      this.setState({ autoClassificationData: { meshData: JSON.parse(doc.body) } });
+      this.setState({ meshData: JSON.parse(doc.body) });
+      this.setState({ showAutoClassificationTab: true });
       const parser = new DOMParser();
     };
     x.onerror = (e) => {
       throw e;
     };
-    const text = striptags(this.state.domContents, [], '\n')
-    x.send(JSON.stringify({ "input" : text  }));
+    const text = striptags(this.state.domContents, [], '\n');
+    x.send(JSON.stringify({ input: text }));
   }
   handleChange(event) {
     this.setState({ value: event.target.value });
@@ -391,17 +395,13 @@ export default class Customform extends Component {
     this.setState({ extLocalConfigName: config.projects.dynamicConfig.extnLocalConfig });
 
 
-    const jsData = await fetch(`/extLocalConfig/${config.projects.dynamicConfig.extnLocalConfig}`).then((response) => {
-      return response.json();
-    }).then((responsoData) => {
+    const jsData = await fetch(`/extLocalConfig/${config.projects.dynamicConfig.extnLocalConfig}`).then(response => response.json()).then((responsoData) => {
       this.setState({ extConfig: responsoData });
       this.setState({ contentType: responsoData.contentType[0].workPackage });
       this.setState({ contentTypeSelected: responsoData.contentType[0].workPackage[0].id });
     }).catch((e) => {
       console.log('Json error', e);
     });
-
-
   }
   authenticate = () => new Promise((resolve) => {
     const authdata = {
@@ -412,7 +412,6 @@ export default class Customform extends Component {
       }
     };
     this.getCookies(APIDATA.BASE_URL, '_open_project_session', (cookies) => {
-
       chrome.cookies.set({ url: APIDATA.BASE_URL, name: '_open_project_session', value: cookies });
       fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/my_preferences/`, authdata)
         .then((response) => {
@@ -474,21 +473,20 @@ export default class Customform extends Component {
         const webPackageId = catdata.id;
         this.setState({ taskId: webPackageId });
         this.toDataUrl(this.state.image, (myBase64) => {
-          const fileName = 'Curated Featured Image.png';
+          const fileName = 'Curated_Featured_Image.png';
           this.uploadImage(webPackageId, fileName, myBase64);
         });
         this.setState({ siteUrl: APIDATA.SITE_URL });
         this.setState({ message: `Saved in ${APIDATA.DOMAIN_NAME} as` });
         this.setState({ loader: false });
         this.uploadOgData(webPackageId);
-        this.uploadMetaData(webPackageId);
         this.uploadMeshData(webPackageId);
         if (this.state.parentId) {
           this.createRelation(webPackageId);
         }
         if (this.state.favIcon) {
           this.toDataUrl(this.state.favIcon, (base64Content) => {
-            const fileName = 'Curated Source FavIcon.png';
+            const fileName = 'Curated_Source_FavIcon.png';
             this.uploadImage(webPackageId, fileName, base64Content);
           });
         }
@@ -558,7 +556,7 @@ export default class Customform extends Component {
   }
 
   uploadImage(id, fileName, data) {
-    const databody = JSON.stringify({ 'fileName': fileName, description: { 'raw': 'A cute kitty, cuddling with its friends!' } });
+    const databody = JSON.stringify({ fileName, description: { raw: 'Opengraph Logo!' } });
     this.formBody = new FormData();
     this.formBody.append('metadata', databody);
     this.formBody.append('file', data, 'opengraph-logo.72382e605ce3.png');
@@ -577,10 +575,65 @@ export default class Customform extends Component {
     const ogFile = new Blob([JSON.stringify(this.state.ogData)], { type: 'application/json' });
     const fr = new FileReader();
     fr.readAsText(ogFile);
-    const databody = JSON.stringify({ fileName: 'Curated OpenGraph.json', description: { raw: 'A cute kitty, cuddling with its friends!' } });
+    const databody = JSON.stringify({ fileName: 'Curated_OpenGraph.json', description: { raw: 'Curated OpenGraph' } });
     const formBody = new FormData();
     formBody.append('metadata', databody);
-    formBody.append('file', ogFile, 'ogData.json');
+    formBody.append('file', ogFile, 'Curated_OpenGraph.json');
+    const authdata = {
+      method: 'POST',
+      body: formBody,
+      credentials: 'include',
+      headers: {
+        // 'Authorization': 'Basic ' + btoa('apikey:' + this.state.apiKey),
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    };
+    fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/work_packages/${id}/attachments`, authdata).then((response) => {
+      if (response.status === 201) {
+        // this.setState({ message: 'Saved Successfully.' });
+      }
+      return response.json();
+    }).then((res) => {
+      this.uploadMetaData(id);
+    });
+  }
+  uploadReadableContent(id) {
+    const readableContent = new Blob([JSON.stringify(this.state.mozilaReadability)], { type: 'application/json' });
+    const fr = new FileReader();
+    fr.readAsText(readableContent);
+    const databody = JSON.stringify({ fileName: 'Curated_Readable_Content.json', description: { raw: 'Readable Contents' } });
+    const formBody = new FormData();
+    formBody.append('metadata', databody);
+    formBody.append('file', readableContent, 'Curated_Readable_Content.json');
+    const authdata = {
+      method: 'POST',
+      body: formBody,
+      credentials: 'include',
+      headers: {
+        // 'Authorization': 'Basic ' + btoa('apikey:' + this.state.apiKey),
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    };
+    fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/work_packages/${id}/attachments`, authdata).then((response) => {
+      if (response.status === 201) {
+        // this.setState({ message: 'Saved Successfully.' });
+      }
+      return response.json();
+    }).then((res) => {
+      if (String(this.state.domContents) !== String(this.state.domInitial)) {
+        console.log('Entry here.....');
+        this.uploadReadableHtml(id);
+      }
+    });
+  }
+  uploadReadableHtml(id) {
+    const readableHtml = new Blob([this.state.domContents], { type: 'plain/text' });
+    const fr = new FileReader();
+    fr.readAsText(readableHtml);
+    const databody = JSON.stringify({ fileName: 'Curated_Readable_Content_Edited.html', description: { raw: 'Readable Content HTML' } });
+    const formBody = new FormData();
+    formBody.append('metadata', databody);
+    formBody.append('file', readableHtml, 'Curated_Readable_Content_Edited.html');
     const authdata = {
       method: 'POST',
       body: formBody,
@@ -593,13 +646,13 @@ export default class Customform extends Component {
     fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/work_packages/${id}/attachments`, authdata);
   }
   uploadMetaData(id) {
-    const ogFile = new Blob([JSON.stringify(this.state.metaData)], { type: 'application/json' });
+    const metaData = new Blob([JSON.stringify(this.state.metaData)], { type: 'application/json' });
     const fr = new FileReader();
-    fr.readAsText(ogFile);
-    const databody = JSON.stringify({ fileName: 'Curated MetaData.json', description: { raw: 'A cute kitty, cuddling with its friends!' } });
+    fr.readAsText(metaData);
+    const databody = JSON.stringify({ fileName: 'Curated_MetaData.json', description: { raw: 'Curated Meta Data' } });
     const formBody = new FormData();
     formBody.append('metadata', databody);
-    formBody.append('file', ogFile, 'ogData.json');
+    formBody.append('file', metaData, 'Curated_MetaData.json');
     const authdata = {
       method: 'POST',
       body: formBody,
@@ -609,16 +662,26 @@ export default class Customform extends Component {
         'X-Requested-With': 'XMLHttpRequest'
       }
     };
-    fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/work_packages/${id}/attachments`, authdata);
+    fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/work_packages/${id}/attachments`, authdata).then((response) => {
+      if (response.status === 201) {
+        // this.setState({ message: 'Saved Successfully.' });
+      }
+      return response.json();
+    }).then((res) => {
+      this.uploadReadableContent(id);
+    });
+  }
+  contentChange = (changeData) => {
+    this.setState({ domContents: changeData });
   }
   uploadMeshData(id) {
     const ogFile = new Blob([JSON.stringify(this.state.meshData)], { type: 'application/json' });
     const fr = new FileReader();
     fr.readAsText(ogFile);
-    const databody = JSON.stringify({ fileName: 'PubMed_Medlines_Similar_Articles.json', description: { raw: 'A cute kitty, cuddling with its friends!' } });
+    const databody = JSON.stringify({ fileName: 'PubMed_Medlines_Similar_Articles.json', description: { raw: 'PubMed Medlines Similar Articles' } });
     const formBody = new FormData();
     formBody.append('metadata', databody);
-    formBody.append('file', ogFile, 'ogData.json');
+    formBody.append('file', ogFile, 'PubMed_Medlines_Similar_Articles.json');
     const authdata = {
       method: 'POST',
       body: formBody,
@@ -669,7 +732,7 @@ export default class Customform extends Component {
     });
   }
   getCookies(domain, name, callback) {
-    chrome.cookies.get({ url: domain, name: name }, (cookie) => {
+    chrome.cookies.get({ url: domain, name }, (cookie) => {
       if (callback) {
         if (cookie) {
           this.coockieValue = cookie.value;
@@ -685,108 +748,119 @@ export default class Customform extends Component {
       <section className={style.sectionContent}>
         {this.state.isLogin ? <div className="ds-l-container">
           <div className="ds-l-row">
-            <div className="ds-u-padding--0 ds-l-col--11">
-              {this.state.showEdit ?
-                <div id="panel-edit">
-                  <form onSubmit={this.handleSubmit}>
-                    <p>
-                      <textarea className={[style.textareaTitle, 'preview__label ds-u-font-size--h4 ds-u-font-style--normal'].join(' ')} value={this.state.value} onChange={this.handleChange} />
-                    </p>
-                    <hr className="on ds-u-fill--gray-lightest" />
-                    {this.state.fetchingContents ? <p className="ds-u-text-align--center">
-                      <button className="ds-c-button">
-                        <span className="ds-c-spinner ds-c-spinner--small" aria-valuetext="Fetching Contents" role="progressbar" /> Fetching Contents
-                      </button>
-                    </p> : null}
-                    <p>
-                      <label>
-                        <textarea className={[style.textareaDesc, 'preview__label ds-u-font-size--small ds-u-font-style--normal'].join(' ')} value={this.state.summary} onChange={this.handleSummary} />
-                      </label>
-                    </p>
-
-                    <p className={style.ogImageContainer}>
-                      {this.state.image.length > 0 ?
-                        <img id="imgTab" onClick={this.activateTabs} src={this.state.image} className={style.ogImages} alt="" />
-                        : null}
-                    </p>
-                    <hr className="on ds-u-fill--gray-lightest" />
-                    {this.state.fetchingContents ? null : <div className="ds-l-row ds-u-margin-left--0">
-                      <div className={[style.favIcon, 'ds-l-col--auto'].join(' ')}>{this.state.favIcon ? <img src={this.state.favIcon} width="18px" height="18px" alt="favIcon" /> : null}</div>
-                      <div className={[style.cleanUrl, 'ds-l-col--10 ds-u-padding-x--0'].join(' ')}><input type="text" className={this.state.parentId ? [style.textareaLink, 'preview__label ds-u-font-style--normal ds-u-color--white on ds-u-fill--secondary-dark ds-u-padding-x--1'].join(' ') : [style.textareaLink, 'preview__label ds-u-font-style--normal'].join(' ')} value={this.state.cleanUrl} onChange={this.handleUrl} style={this.state.parentId ? { height: '20px' } : { height: '18px' }} /></div>
-                    </div>}
-                    <hr className="on ds-u-fill--gray-lightest ds-u-margin-bottom--0" />
-                    {this.state.fetchingContents ? null : <div className="ds-l-row"><div className="ds-l-col--11"><select className="ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1 ds-u-margin-x--1 ds-u-margin-bottom--0" value={this.state.contentTypeSelected} onChange={e => this.setState({ contentTypeSelected: e.target.value })}>
-                      {this.state.contentType.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
-                    </select></div></div>
-                    }
-                    <hr className="on ds-u-fill--gray-lightest ds-u-margin-bottom--0" />
-                    {this.state.fetchingContents ? null : <div className={style.sucessBlock}>
-                      {this.state.loader ? <button className="ds-u-margin-left--1 ds-u-margin-top--1 ds-c-button ds-c-button--primary">
-                        <span className="ds-c-spinner ds-c-spinner--small ds-c-spinner--inverse" aria-valuetext="Saving" role="progressbar" /> Saving
-                      </button> : null}
-                      {this.state.message === '' && this.state.loader === false ?
-                        <div className="ds-l-row">
-                          <div className="ds-l-col--auto">
-                            <input type="submit" value="Post to Lectio" className="ds-u-margin-left--1 ds-u-margin-top--1 ds-c-button ds-c-button--primary" /></div>
-                          <div className="ds-l-col--auto">
-                            {this.state.parentId ? <a className="ds-u-margin-top--1 preview__label ds-u-font-size--base ds-u-font-style--normal" target="_blank" href={`${APIDATA.BASE_URL + APIDATA.SITE_URL + this.state.parentId}/activity`}>{this.state.duplicateMessage}</a> : null}</div>
-                        </div> : null}
-                      {this.state.message !== '' ?
-                        <div className="ds-c-alert ds-c-alert--success">
-                          <div className="ds-c-alert__body">
-                            <p className="ds-c-alert__text">{this.state.message} <a target="_blank" href={APIDATA.BASE_URL + APIDATA.SITE_URL + this.state.taskId} rel="noopener noreferrer">{this.state.taskId ? '#' + this.state.taskId : null}</a></p>
-                          </div>
-                        </div> : null}
-                    </div>}
-
-                  </form>
-                </div>
-                : null}
-              {this.state.showJsonTree ? <div id="panel-meta">
-                <ExtractedContent jsonData={this.state.metaDataJSON} articleData={this.state.domContents} articleTitle={this.state.domTitle} articleExcerpt={this.state.domExcerpt} articleByline={this.state.domByline} />
-              </div> : null}
-              {this.state.showShare ? <div id="panel-share">
-                <div className="usa-accordion site-accordion-code">
-                  <h4 className="usa-accordion__heading site-accordion-code">
-                    <button
-                      className="usa-accordion__button"
-                      aria-expanded="true"
-                      aria-controls="metaDataContent"
-                    >
-                      Auto Classification
-                    </button>
-                  </h4>
-                  {this.state.showAutoClassificationTab ?
-                    <div id="metaDataContent" className="usa-accordion__content usa-prose">
-                      <div className="ds-u-margin-left--1 ds-u-font-size--small" style={{ height: '395px' }}>
-                        <h4>NIH Medical Subjects Heading (MeSH)</h4>
-                        { this.state.autoClassificationData.meshData.MoD_Raw.Term_List.map(type => <div><label><input type="checkbox" value={type.term}  /><span>{type.Term}</span>
-                        </label></div>)
-                        }
+            {this.state.fetchingContents ? <div className="ds-u-padding--0 ds-l-col--11"><p className="ds-u-text-align--center">
+              <button className="ds-c-button">
+                <span className="ds-c-spinner ds-c-spinner--small" aria-valuetext="Fetching Contents" role="progressbar" /> Fetching Contents
+              </button>
+            </p></div> : <div className="ds-u-padding--0 ds-l-col--11">
+                {this.state.showEdit ?
+                  <div id="panel-edit">
+                    <form onSubmit={this.handleSubmit}>
+                      <p>
+                        <textarea className={[style.textareaTitle, 'preview__label ds-u-font-size--h4 ds-u-font-style--normal'].join(' ')} value={this.state.value} onChange={this.handleChange} />
+                      </p>
+                      <hr className="on ds-u-fill--gray-lightest" />
+                      <p>
+                        <div className={[style.textareaDesc, 'preview__label ds-u-font-size--small ds-u-font-style--normal'].join(' ')} >
+                          <CKEditor
+                            editor={ClassicEditor}
+                            config={{
+                              toolbar: ['heading', 'bold', 'italic', 'link', 'undo', 'redo', 'bulletedList', 'numberedList', 'blockQuote']
+                            }}
+                            data={this.state.summary}
+                            onInit={(editor) => {
+                              editor.setData(this.state.summary);
+                            }}
+                            onChange={(event, editor) => {
+                              const data = editor.getData();
+                              this.setState({ summary: data });
+                            }}
+                          />
+                        </div>
+                      </p>
+                      <p className={style.ogImageContainer}>
+                        {this.state.image.length > 0 ?
+                          <img id="imgTab" onClick={this.activateTabs} src={this.state.image} className={style.ogImages} alt="" />
+                          : null}
+                      </p>
+                      <hr className="on ds-u-fill--gray-lightest" />
+                      <div className="ds-l-row ds-u-margin-left--0">
+                        <div className={[style.favIcon, 'ds-l-col--auto'].join(' ')}>{this.state.favIcon ? <img src={this.state.favIcon} width="18px" height="18px" alt="favIcon" /> : null}</div>
+                        <div className={[style.cleanUrl, 'ds-l-col--10 ds-u-padding-x--0'].join(' ')}><input type="text" className={this.state.parentId ? [style.textareaLink, 'preview__label ds-u-font-style--normal ds-u-color--white on ds-u-fill--secondary-dark ds-u-padding-x--1'].join(' ') : [style.textareaLink, 'preview__label ds-u-font-style--normal'].join(' ')} value={this.state.cleanUrl} onChange={this.handleUrl} style={this.state.parentId ? { height: '20px' } : { height: '18px' }} /></div>
                       </div>
-                    </div>
-                    :
-                    <button className="ds-u-margin-left--1 ds-u-margin-top--1 ds-c-button ds-c-button--primary">
-                      <span className="ds-c-spinner ds-c-spinner--small ds-c-spinner--inverse" aria-valuetext="Fetching Data" role="progressbar" /> Fetching Data...
+                      <hr className="on ds-u-fill--gray-lightest ds-u-margin-bottom--0" />
+                      <div className="ds-l-row"><div className="ds-l-col--11"><select className="ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1 ds-u-margin-x--1 ds-u-margin-bottom--0" value={this.state.contentTypeSelected} onChange={e => this.setState({ contentTypeSelected: e.target.value })}>
+                        {this.state.contentType.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
+                      </select></div></div>
+
+                      <hr className="on ds-u-fill--gray-lightest ds-u-margin-bottom--0" />
+                      <div className={style.sucessBlock}>
+                        {this.state.loader ? <button className="ds-u-margin-left--1 ds-u-margin-top--1 ds-c-button ds-c-button--primary">
+                          <span className="ds-c-spinner ds-c-spinner--small ds-c-spinner--inverse" aria-valuetext="Saving" role="progressbar" /> Saving
+                      </button> : null}
+                        {this.state.message === '' && this.state.loader === false ?
+                          <div className="ds-l-row">
+                            <div className="ds-l-col--auto">
+                              <input type="submit" value="Post to Lectio" className="ds-u-margin-left--1 ds-u-margin-top--1 ds-c-button ds-c-button--primary" /></div>
+                            <div className="ds-l-col--auto">
+                              {this.state.parentId ? <a className="ds-u-margin-top--1 preview__label ds-u-font-size--base ds-u-font-style--normal" target="_blank" href={`${APIDATA.BASE_URL + APIDATA.SITE_URL + this.state.parentId}/activity`}>{this.state.duplicateMessage}</a> : null}</div>
+                          </div> : null}
+                        {this.state.message !== '' ?
+                          <div className="ds-c-alert ds-c-alert--success">
+                            <div className="ds-c-alert__body">
+                              <p className="ds-c-alert__text">{this.state.message} <a target="_blank" href={APIDATA.BASE_URL + APIDATA.SITE_URL + this.state.taskId} rel="noopener noreferrer">{this.state.taskId ? `#${this.state.taskId}` : null}</a></p>
+                            </div>
+                          </div> : null}
+                      </div>
+                    </form>
+                  </div>
+                  : null}
+                {this.state.showJsonTree ? <div id="panel-meta">
+                  <ExtractedContent jsonData={this.state.metaDataJSON} articleData={this.state.domContents} onContentChange={this.contentChange} />
+                </div> : null}
+                {this.state.showShare ? <div id="panel-share">
+                  <div className="usa-accordion site-accordion-code">
+                    <h4 className="usa-accordion__heading site-accordion-code">
+                      <button
+                        className="usa-accordion__button"
+                        aria-expanded="true"
+                        aria-controls="metaDataContent"
+                      >
+                        Auto Classification
                     </button>
-                  }
-                </div>    
-              </div> : null}
-              {this.state.showAttachmentTab ? <div id="panel-attachment"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
-              {this.state.showImgTab ? <div id="panel-img"><Popup
-                text="Close"
-                closePopup={this.togglePopup.bind(this)}
-                images={this.state.allImages}
-                selectedImage={this.state.allImages}
-                onChangeValue={this.handleChangeValue}
-              />
-              </div> : null}
-              {this.state.showMsgTab ? <div id="panel-msg"><Feedback siteUrl={this.state.url}/></div> : null}
-              {this.state.showNotificationTab ? <div id="panel-notification"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
-              {this.state.showSettings ? <div id="panel-notification">
-                <p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p>
-              </div> : null}
-            </div>
+                    </h4>
+                    {this.state.showAutoClassificationTab ?
+                      <div id="metaDataContent" className="usa-accordion__content usa-prose">
+                        <div className="ds-u-margin-left--1 ds-u-font-size--small" style={{ height: '500px' }}>
+                          <h4>NIH Medical Subjects Heading (MeSH)</h4>
+                          {this.state.autoClassificationData.meshData.MoD_Raw.Term_List.map(type => <div><label><input type="checkbox" value={type.term} /><span>{type.Term}</span>
+                          </label></div>)
+                          }
+                        </div>
+                      </div>
+                      :
+                      <button className="ds-u-margin-left--1 ds-u-margin-top--1 ds-c-button ds-c-button--primary">
+                        <span className="ds-c-spinner ds-c-spinner--small ds-c-spinner--inverse" aria-valuetext="Fetching classifications from NIH Medical Subject Headings (MeSH)" role="progressbar" /> Fetching classifications from NIH Medical Subject Headings (MeSH)
+                    </button>
+                    }
+                  </div>
+                </div> : null}
+                {this.state.showAttachmentTab ? <div id="panel-attachment"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
+                {this.state.showImgTab ? <div id="panel-img"><Popup
+                  text="Close"
+                  closePopup={this.togglePopup.bind(this)}
+                  images={this.state.allImages}
+                  selectedImage={this.state.allImages}
+                  onChangeValue={this.handleChangeValue}
+                />
+                </div> : null}
+                {this.state.showMsgTab ? <div id="panel-msg"><Feedback siteUrl={this.state.url} cleanUrl={this.state.cleanUrl} /></div> : null}
+                {this.state.showNotificationTab ? <div id="panel-notification"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
+                {this.state.showSettings ? <div id="panel-notification">
+                  <p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p>
+                </div> : null}
+              </div>}
+
             <div className={[style.sideBar, 'ds-u-padding--0 ds-l-col--1 ds-u-border-left--1'].join(' ')}>
               <div>
                 <div>

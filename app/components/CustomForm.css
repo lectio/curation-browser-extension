@@ -256,7 +256,6 @@
 }
 .textareaDesc{
   border: none;
-  min-height: 210px;
   padding:0px 3%;
   white-space: normal;
   display: block;
