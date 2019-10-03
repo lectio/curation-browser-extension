@@ -58,10 +58,12 @@
   display: block;
   margin-left: auto;
   margin-right: auto;
-  height:75px;
-  width: 50%;
+  /* height:75px;
+  width: 50%; */
   cursor: pointer;
   object-fit: contain;
+  max-height: 100px;
+  min-height: 80px;
 }
 .submitButton{
   background-color: #316ea5;
@@ -403,4 +405,7 @@
 }
 .accordContent{
   height: 95%;
+}
+.readableContentUl li{
+  font-size: 13px !important;
 }

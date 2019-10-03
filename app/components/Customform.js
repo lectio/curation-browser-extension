@@ -7,7 +7,9 @@ import CKEditor from '@ckeditor/ckeditor5-react';
 import ClassicEditor from '@ckeditor/ckeditor5-build-classic';
 import * as APIDATA from '../constants/apidata';
 import logo from '../../chrome/assets/img/logo-small.png';
+import pdfImage from '../../chrome/assets/img/edit-pdf.png';
 import * as INSTANCE from '../constants/config.json';
+import * as pdf from 'pdfjs-dist';
 
 const urlExists = require('url-exists');
 
@@ -15,7 +17,7 @@ export default class Customform extends Component {
   constructor(props) {
     super(props);
     this.state = {
-      value: '',
+      title: '',
       summary: '',
       message: '',
       image: '',
@@ -60,7 +62,12 @@ export default class Customform extends Component {
       domInitial: '',
       autoClassificationData: [],
       showAutoClassificationTab: false,
-      mozilaReadability: ''
+      mozilaReadability: '',
+      isPdf: false,
+      readabilityTitle: '',
+      readabilityExcerpt: '',
+      readabilityByline: '',
+      readabilityContent: ''
     };
     this.handleChange = this.handleChange.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
@@ -74,6 +81,13 @@ export default class Customform extends Component {
     this.getCookies = this.getCookies.bind(this);
     this.getMeshData = this.getMeshData.bind(this);
     this.contentChange = this.contentChange.bind(this);
+    this.metadataReading = this.metadataReading.bind(this);
+    this.isPdfLink = this.isPdfLink.bind(this);
+    this.replaceWithReadableContent = this.replaceWithReadableContent.bind(this);
+    this.replaceWithReadableContentAndMeta = this.replaceWithReadableContentAndMeta.bind(this);
+    this.clearImage = this.clearImage.bind(this);
+    this.clearContent = this.clearContent.bind(this);
+    this.appendReadableContent = this.appendReadableContent.bind(this);
   }
   componentDidMount() {
     this.authenticate();
@@ -94,17 +108,21 @@ export default class Customform extends Component {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const tabUrl = tabs[0].url;
       this.setState({ url: tabUrl, cleanUrl: this.generateCleanURL(tabUrl) });
-
+      if (this.isPdfLink(tabUrl) == 'pdf') {
+        this.metadataReading(tabUrl);
+        return;
+      }
       const x = new XMLHttpRequest();
       x.open('GET', tabUrl);
       x.responseType = 'document';
       x.onload = (e) => {
         e.preventDefault();
         const doc = x.response;
-
         if (doc) {
           const ogTitle = doc.querySelector('meta[property="og:title"]');
           const ogDesc = doc.querySelector('meta[property="og:description"]');
+          const ogSiteName = doc.querySelector('meta[property="og:site_name"]');
+          const siteName = ogSiteName ? ogSiteName.getAttribute('content') : '';
           let desc = '';
           let title = '';
           let image = doc.querySelector('meta[property="og:image"]');
@@ -112,6 +130,24 @@ export default class Customform extends Component {
           const metaDescription = doc.querySelector('meta[name="description"]');
           const metaTitle = doc.querySelector('meta[name="title"]');
           const titleTag = doc.querySelector('title').innerHTML;
+          const article = new Readability(doc).parse();
+          if (article) {
+            let domData = `<b style="color:blue;">Title: </b>${article.title}<br>`;
+            domData = `${domData}<b>Excerpt: </b>${article.excerpt}<br>`;
+            if (article.byline) {
+              domData = `${domData}<b>Byline: </b>${article.byline}<br>`;
+            }
+            domData += article.content;
+            this.setState({
+              mozilaReadability: article,
+              readabilityTitle: article.title,
+              readabilityExcerpt: article.excerpt,
+              readabilityByline: article.byline,
+              readabilityContent: article.content,
+              domContents: domData,
+              domInitial: domData,
+            });
+          }
           if (ogTitle) {
             title = ogTitle.getAttribute('content');
           } else if (dcTitle && title === '') {
@@ -121,10 +157,17 @@ export default class Customform extends Component {
           } else if (titleTag && title === '') {
             title = titleTag;
           }
+          title = title.trim();
+          if (!title) {
+            title = article.title;
+          }
           if (ogDesc) {
             desc = ogDesc.getAttribute('content');
           } else if (metaDescription && desc === '') {
             desc = metaDescription.getAttribute('content');
+          }
+          if (!desc) {
+            desc = article.content;
           }
           const ogData = [];
           const og = doc.querySelectorAll("meta[property^='og']");
@@ -156,7 +199,8 @@ export default class Customform extends Component {
               let baseUrl = this.state.url.split('/');
               let readMoreurl = `${baseUrl[2]}`;
               readMoreurl = readMoreurl.replace('www.', '');
-              const readMore = `\n\n[Read on ${readMoreurl}](${this.state.cleanUrl})`;
+              const readMore = `<br><a target="_blank" href=${readMoreurl}>Read on ${this.state.cleanUrl}</a>`;
+              // const readMore = `<br>[Read on ${readMoreurl}](${this.state.cleanUrl})`;
               const pattern = /^((http|https|www):\/\/)/;
               if (desc && selectedContent === '') {
                 desc += '<br>';
@@ -170,10 +214,18 @@ export default class Customform extends Component {
                 this.setState({ summary: selectedContent });
               }
               if (title) {
-                title = title.split('--');
-                title = title[0].split(/[»|]/);
-                title = title[0];
-                this.setState({ value: title });
+                let titleValue = title.split('--');
+                titleValue = titleValue[0].split(/[»|]/);
+                titleValue = titleValue[0];
+                const restTitle = titleValue.substring(0, titleValue.lastIndexOf('-') + 1);
+                const lastTitle = titleValue.substring(titleValue.lastIndexOf('-') + 1, titleValue.length);
+                if (siteName) {
+                  if ((lastTitle.toLowerCase()).trim() === (siteName.toLowerCase()).trim()) {
+                    titleValue = restTitle.replace('-', '');
+                    titleValue = titleValue.trim();
+                  }
+                }
+                this.setState({ title: titleValue });
               }
               if (image) {
                 image = image.getAttribute('content');
@@ -217,23 +269,9 @@ export default class Customform extends Component {
             }
           }
           this.setState({ allImages: srcList });
-          const article = new Readability(doc).parse();
           this.setState({
             doc
           });
-          if (article) {
-            let domData = `<b style="color:blue;">Title: </b>${article.title}<br>`;
-            domData = `${domData}<b>Excerpt: </b>${article.excerpt}<br>`;
-            if (article.byline) {
-              domData = `${domData}<b>Byline: </b>${article.byline}<br>`;
-            }
-            domData += article.content;
-            this.setState({
-              mozilaReadability: article,
-              domContents: domData,
-              domInitial: domData,
-            });
-          }
           this.getMeshData();
         } else {
           this.setState({ fetchingContents: false });
@@ -300,7 +338,6 @@ export default class Customform extends Component {
       this.setState({ autoClassificationData: { meshData: JSON.parse(doc.body) } });
       this.setState({ meshData: JSON.parse(doc.body) });
       this.setState({ showAutoClassificationTab: true });
-      const parser = new DOMParser();
     };
     x.onerror = (e) => {
       throw e;
@@ -309,7 +346,7 @@ export default class Customform extends Component {
     x.send(JSON.stringify({ input: text }));
   }
   handleChange(event) {
-    this.setState({ value: event.target.value });
+    this.setState({ title: event.target.value });
   }
   handleUrl(event) {
     this.setState({ cleanUrl: event.target.value });
@@ -438,7 +475,7 @@ export default class Customform extends Component {
     event.preventDefault();
     this.setState({ loader: true });
     const params = JSON.stringify({
-      subject: this.state.value,
+      subject: this.state.title,
       description: {
         format: 'markdown',
         raw: this.state.summary,
@@ -472,24 +509,31 @@ export default class Customform extends Component {
       }).then((catdata) => {
         const webPackageId = catdata.id;
         this.setState({ taskId: webPackageId });
-        this.toDataUrl(this.state.image, (myBase64) => {
-          const fileName = 'Curated_Featured_Image.png';
-          this.uploadImage(webPackageId, fileName, myBase64);
-        });
+        if (this.state.isPdf == true) {
+          this.toDataUrlPdf(this.state.url, (myBase64) => {
+            const fileName = 'Curated_Featured_Image.pdf';
+            this.uploadPdf(webPackageId, fileName, myBase64);
+          });
+        } else {
+          this.toDataUrl(this.state.image, (myBase64) => {
+            const fileName = 'Curated_Featured_Image.png';
+            this.uploadImage(webPackageId, fileName, myBase64);
+            this.uploadOgData(webPackageId);
+            this.uploadMeshData(webPackageId);
+            if (this.state.parentId) {
+              this.createRelation(webPackageId);
+            }
+            if (this.state.favIcon) {
+              this.toDataUrl(this.state.favIcon, (base64Content) => {
+                const fileName = 'Curated_Source_FavIcon.png';
+                this.uploadImage(webPackageId, fileName, base64Content);
+              });
+            }
+          });
+        }
         this.setState({ siteUrl: APIDATA.SITE_URL });
         this.setState({ message: `Saved in ${APIDATA.DOMAIN_NAME} as` });
         this.setState({ loader: false });
-        this.uploadOgData(webPackageId);
-        this.uploadMeshData(webPackageId);
-        if (this.state.parentId) {
-          this.createRelation(webPackageId);
-        }
-        if (this.state.favIcon) {
-          this.toDataUrl(this.state.favIcon, (base64Content) => {
-            const fileName = 'Curated_Source_FavIcon.png';
-            this.uploadImage(webPackageId, fileName, base64Content);
-          });
-        }
       });
   }
 
@@ -621,7 +665,6 @@ export default class Customform extends Component {
       return response.json();
     }).then((res) => {
       if (String(this.state.domContents) !== String(this.state.domInitial)) {
-        console.log('Entry here.....');
         this.uploadReadableHtml(id);
       }
     });
@@ -743,25 +786,118 @@ export default class Customform extends Component {
       }
     });
   }
+  isPdfLink(url) {
+    let thisHrefExt = url.split('.');
+    thisHrefExt = thisHrefExt[thisHrefExt.length - 1];
+    if (thisHrefExt.toLowerCase() == 'pdf') { //If the extension is "pdf" (case insensitive)...
+      return 'pdf';
+    }
+    return 'html';
+  }
+
+  metadataReading(url) {
+    pdf.getDocument(url).then((pdfDoc_) => {
+      const pdfDoc = pdfDoc_;
+      pdfDoc.getMetadata().then((stuff) => {
+        if (stuff) {
+          this.setState({ title: stuff.info.Title ? stuff.info.Title : 'Pdf Document' });
+          this.setState({ fetchingContents: false });
+          this.setState({ summary: stuff.info.subject ? stuff.info.subject : '' });
+        }
+        // this.setState({ loader: false });
+        //this.setState({ message: stuff.info.Title });
+        this.setState({ isPdf: true });
+      }).catch((err) => {
+        console.log(err);
+      });
+    }).catch((err) => {
+      console.log(`Error getting PDF from ${url}`);
+      console.log(err);
+    });
+  }
+  uploadPdf(id, fileName, data) {
+    const databody = JSON.stringify({ fileName, description: { raw: 'Opengraph Logo!' } });
+    this.formBody = new FormData();
+    this.formBody.append('metadata', databody);
+    this.formBody.append('file', data, 'opengraph-logo.72382e605ce3.pdf');
+    const authdata = {
+      method: 'POST',
+      body: this.formBody,
+      credentials: 'include',
+      headers: {
+        // 'Authorization': 'Basic ' + btoa('apikey:' + this.state.apiKey),
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    };
+    fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/work_packages/${id}/attachments`, authdata);
+  }
+  toDataUrlPdf = (url, callback) => {
+    const xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = function () {
+      if (this.readyState == 4 && this.status == 200) {
+        callback(this.response);
+        const pdf = document.getElementById('img');
+        if (pdf) {
+          // const urlObj = window.URL || window.webkitURL;
+          // img.src = urlObj.createObjectURL(this.response);
+        }
+      }
+    };
+    xhr.open('GET', url);
+    xhr.responseType = 'blob';
+    xhr.send();
+  }
+  replaceWithReadableContent() {
+    if (!this.state.isPdf) {
+      this.setState({ summary: this.state.readabilityContent });
+    }
+  }
+  replaceWithReadableContentAndMeta() {
+    if (!this.state.isPdf) {
+      this.setState({ summary: this.state.domContents });
+    }
+  }
+  clearImage() {
+    if (!this.state.isPdf) {
+      this.setState({ image: '' });
+    }
+  }
+  clearContent() {
+    if (!this.state.isPdf) {
+      this.setState({ summary: '' });
+    }
+  }
+  appendReadableContent() {
+    if (!this.state.isPdf) {
+      let currentContent = this.state.summary;
+      currentContent = `${currentContent}<br>${this.state.domContents}`;
+      this.setState({
+        summary: currentContent
+      });
+    }
+  }
   render() {
     return (
-      <section className={style.sectionContent}>
-        {this.state.isLogin ? <div className="ds-l-container">
-          <div className="ds-l-row">
-            {this.state.fetchingContents ? <div className="ds-u-padding--0 ds-l-col--11"><p className="ds-u-text-align--center">
-              <button className="ds-c-button">
-                <span className="ds-c-spinner ds-c-spinner--small" aria-valuetext="Fetching Contents" role="progressbar" /> Fetching Contents
-              </button>
-            </p></div> : <div className="ds-u-padding--0 ds-l-col--11">
+      <section className={style.sectionContent} >
+        {
+          this.state.isLogin ? <div className="ds-l-container">
+            <div className="ds-l-row">
+              {this.state.fetchingContents ? <div className="ds-u-padding--0 ds-l-col--11"><p className="ds-u-text-align--center">
+                <button className="ds-c-button">
+                  <span className="ds-c-spinner ds-c-spinner--small" aria-valuetext="Fetching Contents" role="progressbar" /> Fetching Contents
+                </button>
+              </p></div> : <div className="ds-u-padding--0 ds-l-col--11">
                 {this.state.showEdit ?
                   <div id="panel-edit">
-                    <form onSubmit={this.handleSubmit}>
-                      <p>
-                        <textarea className={[style.textareaTitle, 'preview__label ds-u-font-size--h4 ds-u-font-style--normal'].join(' ')} value={this.state.value} onChange={this.handleChange} />
-                      </p>
-                      <hr className="on ds-u-fill--gray-lightest" />
-                      <p>
-                        <div className={[style.textareaDesc, 'preview__label ds-u-font-size--small ds-u-font-style--normal'].join(' ')} >
+                    <form onSubmit={this.handleSubmit} id="homePageForm">
+                      <div className="ds-l-row ds-u-padding--1">
+                        <div className="ds-l-col--11">
+                          <textarea className={[style.textareaTitle, 'preview__label ds-u-font-size--h4 ds-u-font-style--normal'].join(' ')} value={this.state.title} onChange={this.handleChange} />
+                        </div>
+                      </div>
+
+                      <div className="ds-l-row">
+                        <div className="ds-l-col--12 preview__label ds-u-font-size--small ds-u-font-style--normal">
                           <CKEditor
                             editor={ClassicEditor}
                             config={{
@@ -777,12 +913,25 @@ export default class Customform extends Component {
                             }}
                           />
                         </div>
-                      </p>
-                      <p className={style.ogImageContainer}>
-                        {this.state.image.length > 0 ?
-                          <img id="imgTab" onClick={this.activateTabs} src={this.state.image} className={style.ogImages} alt="" />
-                          : null}
-                      </p>
+                      </div>
+                      <div className="ds-l-row ds-u-padding-right--1">
+                        <div className="ds-l-col--8">
+                          <ul className={[style.readableContentUl, 'ds-c-list ds-u-padding-left--3 ds-u-margin--0'].join(' ')} aria-labelledby="unordered-list-id">
+                            <li className="ds-u-margin--0"><a className="ds-u-color--muted" href="#" onClick={this.replaceWithReadableContent}>Replace with Readable Content</a></li>
+                            <li className="ds-u-margin--0"><a className="ds-u-color--muted" href="#" onClick={this.replaceWithReadableContentAndMeta}>Replace with Readable Content & Meta data</a></li>
+                            <li className="ds-u-margin--0"><a className="ds-u-color--muted" href="#" onClick={this.appendReadableContent}>Append Readable Content</a></li>
+                            <li className="ds-u-margin--0"><a className="ds-u-color--muted" href="#" onClick={this.clearContent}>Clear Content</a></li>
+                            <li className="ds-u-margin--0"><a className="ds-u-color--muted" href="#" onClick={this.clearImage}>Clear Image</a></li>
+                          </ul>
+                        </div>
+                        <div className="ds-l-col--4">
+                          {this.state.image.length > 0 ?
+                            <img id="imgTab" onClick={this.activateTabs} src={this.state.image} className={style.ogImages} alt="" />
+                            : null}
+                          {this.state.isPdf ?
+                            <img src={pdfImage} alt="pdf" height="42" width="42" /> : null}
+                        </div>
+                      </div>
                       <hr className="on ds-u-fill--gray-lightest" />
                       <div className="ds-l-row ds-u-margin-left--0">
                         <div className={[style.favIcon, 'ds-l-col--auto'].join(' ')}>{this.state.favIcon ? <img src={this.state.favIcon} width="18px" height="18px" alt="favIcon" /> : null}</div>
@@ -797,7 +946,7 @@ export default class Customform extends Component {
                       <div className={style.sucessBlock}>
                         {this.state.loader ? <button className="ds-u-margin-left--1 ds-u-margin-top--1 ds-c-button ds-c-button--primary">
                           <span className="ds-c-spinner ds-c-spinner--small ds-c-spinner--inverse" aria-valuetext="Saving" role="progressbar" /> Saving
-                      </button> : null}
+                        </button> : null}
                         {this.state.message === '' && this.state.loader === false ?
                           <div className="ds-l-row">
                             <div className="ds-l-col--auto">
@@ -826,8 +975,8 @@ export default class Customform extends Component {
                         aria-expanded="true"
                         aria-controls="metaDataContent"
                       >
-                        Auto Classification
-                    </button>
+                          Auto Classification
+                      </button>
                     </h4>
                     {this.state.showAutoClassificationTab ?
                       <div id="metaDataContent" className="usa-accordion__content usa-prose">
@@ -841,7 +990,7 @@ export default class Customform extends Component {
                       :
                       <button className="ds-u-margin-left--1 ds-u-margin-top--1 ds-c-button ds-c-button--primary">
                         <span className="ds-c-spinner ds-c-spinner--small ds-c-spinner--inverse" aria-valuetext="Fetching classifications from NIH Medical Subject Headings (MeSH)" role="progressbar" /> Fetching classifications from NIH Medical Subject Headings (MeSH)
-                    </button>
+                      </button>
                     }
                   </div>
                 </div> : null}
@@ -861,54 +1010,55 @@ export default class Customform extends Component {
                 </div> : null}
               </div>}
 
-            <div className={[style.sideBar, 'ds-u-padding--0 ds-l-col--1 ds-u-border-left--1'].join(' ')}>
-              <div>
+              <div className={[style.sideBar, 'ds-u-padding--0 ds-l-col--1 ds-u-border-left--1'].join(' ')}>
                 <div>
-                  <ul className={[style.verticalNavCustom, 'ds-c-vertical-nav'].join(' ')}>
-                    <li className={this.state.showEdit ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
-                      <a className={this.state.showEdit ? [style.editActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.editInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="editTab" />
-                    </li>
-                    <li className={this.state.showJsonTree ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
-                      <a className={this.state.showJsonTree ? [style.metaActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.metaInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="jsonTree" />
-                    </li>
-                    <li className={this.state.showImgTab ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
-                      <a className={this.state.showImgTab ? [style.imgActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.imgInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="imgTab" />
-                    </li>
-                    <li className={this.state.showShare ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
-                      <a className={this.state.showShare ? [style.shareActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.shareInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="shareTab" />
-                    </li>
-                    <li className={this.state.showNotificationTab ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
-                      <a className={this.state.showNotificationTab ? [style.notificationActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.notificationInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="notificationTab" />
-                    </li>
-                    <li className={this.state.showAttachmentTab ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
-                      <a className={this.state.showAttachmentTab ? [style.attachmentActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.attachmentInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="attachmentTab" />
-                    </li>
-                    <li className={this.state.showMsgTab ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
-                      <a className={this.state.showMsgTab ? [style.messageActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.messageInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="msgTab" />
-                    </li>
-                    <li className={this.state.showSettings ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
-                      <a className={this.state.showSettings ? [style.settingsActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.settingsInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="settingsTab" />
-                    </li>
-                  </ul>
+                  <div>
+                    <ul className={[style.verticalNavCustom, 'ds-c-vertical-nav'].join(' ')}>
+                      <li className={this.state.showEdit ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
+                        <a className={this.state.showEdit ? [style.editActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.editInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="editTab" />
+                      </li>
+                      <li className={this.state.showJsonTree ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
+                        <a className={this.state.showJsonTree ? [style.metaActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.metaInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="jsonTree" />
+                      </li>
+                      <li className={this.state.showImgTab ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
+                        <a className={this.state.showImgTab ? [style.imgActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.imgInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="imgTab" />
+                      </li>
+                      <li className={this.state.showShare ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
+                        <a className={this.state.showShare ? [style.shareActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.shareInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="shareTab" />
+                      </li>
+                      <li className={this.state.showNotificationTab ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
+                        <a className={this.state.showNotificationTab ? [style.notificationActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.notificationInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="notificationTab" />
+                      </li>
+                      <li className={this.state.showAttachmentTab ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
+                        <a className={this.state.showAttachmentTab ? [style.attachmentActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.attachmentInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="attachmentTab" />
+                      </li>
+                      <li className={this.state.showMsgTab ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
+                        <a className={this.state.showMsgTab ? [style.messageActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.messageInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="msgTab" />
+                      </li>
+                      <li className={this.state.showSettings ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
+                        <a className={this.state.showSettings ? [style.settingsActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.settingsInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="settingsTab" />
+                      </li>
+                    </ul>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div> : <div>
+          </div> : <div>
             <div>
               <img id="logoIcon" className={style.logoSmall} src={logo} alt="Lectio" />
             </div>
             <div className="ds-u-font-size--h3 ds-u-text-align--center ds-u-margin-bottom--3">
-              You are not authenticated yet, <br />please log in to continue.
-          </div>
+                You are not authenticated yet, <br />please log in to continue.
+            </div>
             <hr className="on ds-u-fill--gray-lightest" />
             <div className="ds-u-text-align--center ds-u-margin-top--4">
               <div claasName="ds-u-margin-top--4"><a className="ds-c-button ds-c-button--primary" onClick={this.signinTab} >Sign in</a></div>
               <div className="ds-u-font-style--italic ds-u-margin-top--4 ds-u-margin-bottom--2">
-                After you’ve signed in, <br />please click the extension button again.
+                  After you’ve signed in, <br />please click the extension button again.
+              </div>
             </div>
-            </div>
-          </div>}
+          </div>
+        }
       </section>
     );
   }

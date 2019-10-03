@@ -1,5 +1,7 @@
 import React from 'react';
 import * as APIDATA from '../constants/apidata';
+import CKEditor from '@ckeditor/ckeditor5-react';
+import ClassicEditor from '@ckeditor/ckeditor5-build-classic';
 
 export default class Feedback extends React.Component {
   constructor(props) {
@@ -143,15 +145,29 @@ export default class Feedback extends React.Component {
   render() {
     return (
       <section className="ds-l-container">
-        <form onSubmit={this.handleSubmit}>
+        <form onSubmit={this.handleSubmit} id="feedbackForm">
           <div className="ds-l-row ds-u-margin-top--2">
             <div className="ds-l-col">
-              <input type="text" className="ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1" name="Subject" placeholder="Subject" value={this.state.subject} onChange={this.handleSubject} required />
+              <input type="text" className="ds-c-field preview__label ds-u-font-size--small ds-u-font-style--normal ds-u-border--1" name="Subject" placeholder="Subject" value={this.state.subject} onChange={this.handleSubject} required />
             </div>
           </div>
           <div className="ds-l-row  ds-u-margin-top--0">
-            <div className="ds-l-col">
-              <textarea className="ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1" name="Description" rows="25" value={this.state.description} onChange={this.handleDescription} />
+            <div className="ds-l-col preview__label ds-u-font-size--small ds-u-font-style--normal">
+              <CKEditor
+                editor={ClassicEditor}
+                config={{
+                  toolbar: ['heading', 'bold', 'italic', 'link', 'undo', 'redo', 'bulletedList', 'numberedList', 'blockQuote']
+                }}
+                data={this.state.description}
+                onInit={(editor) => {
+                  editor.setData(this.state.description);
+                }}
+                onChange={(event, editor) => {
+                  const data = editor.getData();
+                  this.setState({ description: data });
+                }}
+              />
+              {/* <textarea className="ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1" name="Description" rows="25" value={this.state.description} onChange={this.handleDescription} /> */}
             </div>
           </div>
           <hr className="on ds-u-fill--gray-lightest" />

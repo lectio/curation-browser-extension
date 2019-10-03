@@ -23,12 +23,9 @@ export default class ExtractedContent extends React.Component {
           >Readable Content
           </button>
         </h4>
-        <div id="readableContent" className="usa-accordion__content usa-prose ds-u-overflow--hidden">
-          <div className="ds-u-margin-left--1 ds-u-font-size--small" style={{ height: '465px' }}>
-            {/* {this.props.articleTitle ? <div className="ds-l-row ds-u-fill--warn-lightest"><span className="ds-u-font-weight--bold ds-u-padding-right--1">Title:</span> {this.props.articleTitle}</div> : null}
-            {this.props.articleExcerpt ? <div className="ds-l-row ds-u-fill--warn-lightest"><span className="ds-u-font-weight--bold ds-u-padding-right--1">Excerpt:</span> {this.props.articleExcerpt}</div> : null}
-            {this.props.articleByline ? <div className="ds-l-row ds-u-fill--warn-lightest"><span className="ds-u-font-weight--bold ds-u-padding-right--1">Byline:</span> {this.props.articleByline}</div> : null} */}
-            <div className="ds-l-row ds-u-margin-top--0">
+        <div id="readableContent" className="usa-accordion__content usa-prose ds-u-overflow--hidden ds-u-padding-top--0 ds-u-padding-left--1">
+          <div className="ds-u-margin-left--1" style={{ height: '465px' }}>
+            <div className="ds-l-row ds-u-margin-top--0 preview__label ds-u-font-size--small ds-u-font-style--normal">
               <CKEditor
                 editor={ClassicEditor}
                 config={{
