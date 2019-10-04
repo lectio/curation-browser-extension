@@ -2,12 +2,28 @@
     min-height: 251px !important;
     max-height: 251px !important;
 }
-#readableContent .ck-editor__editable_inline {
-    min-height: 446px !important;
-    max-height: 446px !important;
+#editableMetaContent .ck-editor__editable_inline {
+    min-height: 400px !important;
+    max-height: 400px !important;
     padding-bottom: 20px !important;
 }
 #feedbackForm .ck-editor__editable_inline {
     min-height: 430px !important;
     max-height: 430px !important;
+}
+#homePageForm .ck.ck-editor__main>.ck-editor__editable:not(.ck-focused){
+    border-left:0px !important;
+    border-right:0px !important;
+}
+#homePageForm .ck.ck-editor .ck-editor__top .ck-sticky-panel .ck-toolbar{
+    border-left:0px !important;
+    border-right:0px !important;
+}
+#editableMetaContent .ck.ck-editor__main>.ck-editor__editable:not(.ck-focused){
+    border-left:0px !important;
+    border-right:0px !important;
+}
+#editableMetaContent .ck.ck-editor .ck-editor__top .ck-sticky-panel .ck-toolbar{
+    border-left:0px !important;
+    border-right:0px !important;
 }

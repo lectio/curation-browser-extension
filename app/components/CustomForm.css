@@ -409,3 +409,10 @@
 .readableContentUl li{
   font-size: 13px !important;
 }
+.titleError{
+  padding-left:5px;
+  min-height: 30px;
+  width: 100%;
+  resize: none;
+  border-color: #D8000C;
+}

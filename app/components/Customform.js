@@ -67,7 +67,8 @@ export default class Customform extends Component {
       readabilityTitle: '',
       readabilityExcerpt: '',
       readabilityByline: '',
-      readabilityContent: ''
+      readabilityContent: '',
+      initialSummary: ''
     };
     this.handleChange = this.handleChange.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
@@ -110,177 +111,174 @@ export default class Customform extends Component {
       this.setState({ url: tabUrl, cleanUrl: this.generateCleanURL(tabUrl) });
       if (this.isPdfLink(tabUrl) == 'pdf') {
         this.metadataReading(tabUrl);
-        return;
-      }
-      const x = new XMLHttpRequest();
-      x.open('GET', tabUrl);
-      x.responseType = 'document';
-      x.onload = (e) => {
-        e.preventDefault();
-        const doc = x.response;
-        if (doc) {
-          const ogTitle = doc.querySelector('meta[property="og:title"]');
-          const ogDesc = doc.querySelector('meta[property="og:description"]');
-          const ogSiteName = doc.querySelector('meta[property="og:site_name"]');
-          const siteName = ogSiteName ? ogSiteName.getAttribute('content') : '';
-          let desc = '';
-          let title = '';
-          let image = doc.querySelector('meta[property="og:image"]');
-          const dcTitle = doc.querySelector('meta[name="DC.Title"]');
-          const metaDescription = doc.querySelector('meta[name="description"]');
-          const metaTitle = doc.querySelector('meta[name="title"]');
-          const titleTag = doc.querySelector('title').innerHTML;
-          const article = new Readability(doc).parse();
-          if (article) {
-            let domData = `<b style="color:blue;">Title: </b>${article.title}<br>`;
-            domData = `${domData}<b>Excerpt: </b>${article.excerpt}<br>`;
-            if (article.byline) {
-              domData = `${domData}<b>Byline: </b>${article.byline}<br>`;
+      } else {
+        const x = new XMLHttpRequest();
+        x.open('GET', tabUrl);
+        x.responseType = 'document';
+        x.onload = (e) => {
+          e.preventDefault();
+          const doc = x.response;
+          if (doc) {
+            const ogTitle = doc.querySelector('meta[property="og:title"]');
+            const ogDesc = doc.querySelector('meta[property="og:description"]');
+            const ogSiteName = doc.querySelector('meta[property="og:site_name"]');
+            const siteName = ogSiteName ? ogSiteName.getAttribute('content') : '';
+            let desc = '';
+            let title = '';
+            let image = doc.querySelector('meta[property="og:image"]');
+            const dcTitle = doc.querySelector('meta[name="DC.Title"]');
+            const metaDescription = doc.querySelector('meta[name="description"]');
+            const metaTitle = doc.querySelector('meta[name="title"]');
+            const titleTag = doc.querySelector('title').innerHTML;
+            const article = new Readability(doc).parse();
+            if (article) {
+              this.setState({
+                mozilaReadability: article,
+                readabilityTitle: article.title,
+                readabilityExcerpt: article.excerpt,
+                readabilityByline: article.byline,
+                readabilityContent: article.content,
+                domContents: article.content,
+                domInitial: article.content,
+              });
             }
-            domData += article.content;
-            this.setState({
-              mozilaReadability: article,
-              readabilityTitle: article.title,
-              readabilityExcerpt: article.excerpt,
-              readabilityByline: article.byline,
-              readabilityContent: article.content,
-              domContents: domData,
-              domInitial: domData,
-            });
-          }
-          if (ogTitle) {
-            title = ogTitle.getAttribute('content');
-          } else if (dcTitle && title === '') {
-            title = dcTitle.getAttribute('content');
-          } else if (metaTitle && title === '') {
-            title = metaTitle.getAttribute('content');
-          } else if (titleTag && title === '') {
-            title = titleTag;
-          }
-          title = title.trim();
-          if (!title) {
-            title = article.title;
-          }
-          if (ogDesc) {
-            desc = ogDesc.getAttribute('content');
-          } else if (metaDescription && desc === '') {
-            desc = metaDescription.getAttribute('content');
-          }
-          if (!desc) {
-            desc = article.content;
-          }
-          const ogData = [];
-          const og = doc.querySelectorAll("meta[property^='og']");
-          let favicon;
-          const nodeList = doc.querySelectorAll('link');
-          for (let i = 0; i < nodeList.length; i++) {
-            if ((nodeList[i].getAttribute('rel') === 'icon') || (nodeList[i].getAttribute('rel') === 'shortcut icon')) {
-              favicon = nodeList[i].getAttribute('href');
+            if (ogTitle) {
+              title = ogTitle.getAttribute('content');
+            } else if (dcTitle && title === '') {
+              title = dcTitle.getAttribute('content');
+            } else if (metaTitle && title === '') {
+              title = metaTitle.getAttribute('content');
+            } else if (titleTag && title === '') {
+              title = titleTag;
             }
-          }
-          let i = 0;
-          for (i = 0; i < og.length; i++) {
-            ogData.push({ name: og[i].attributes.property.nodeValue, content: og[i].attributes.content.nodeValue });
-          }
-          this.setState({ ogData });
-          const metaDataOb = [];
-          const meta = doc.getElementsByTagName('meta');
-          let j = 0;
-          for (j = 0; j < meta.length; j++) {
-            if (meta.item(j).name !== '') {
-              metaDataOb.push({ name: meta.item(j).name, content: meta.item(j).content });
+            title = title.trim();
+            if (!title) {
+              title = article.title;
             }
-          }
-          this.setState({ metaData: metaDataOb });
-          this.generateJSON(doc);
-          if (x.readyState === 4) {
-            if (x.status === 200) {
-              this.findDuplicate();
-              let baseUrl = this.state.url.split('/');
-              let readMoreurl = `${baseUrl[2]}`;
-              readMoreurl = readMoreurl.replace('www.', '');
-              const readMore = `<br><a target="_blank" href=${readMoreurl}>Read on ${this.state.cleanUrl}</a>`;
-              // const readMore = `<br>[Read on ${readMoreurl}](${this.state.cleanUrl})`;
-              const pattern = /^((http|https|www):\/\/)/;
-              if (desc && selectedContent === '') {
-                desc += '<br>';
-                desc += readMore;
-                this.setState({ summary: desc });
+            if (ogDesc) {
+              desc = ogDesc.getAttribute('content');
+            } else if (metaDescription && desc === '') {
+              desc = metaDescription.getAttribute('content');
+            }
+            if (!desc) {
+              desc = article.content;
+            }
+            const ogData = [];
+            const og = doc.querySelectorAll("meta[property^='og']");
+            let favicon;
+            const nodeList = doc.querySelectorAll('link');
+            for (let i = 0; i < nodeList.length; i++) {
+              if ((nodeList[i].getAttribute('rel') === 'icon') || (nodeList[i].getAttribute('rel') === 'shortcut icon')) {
+                favicon = nodeList[i].getAttribute('href');
+              }
+            }
+            let i = 0;
+            for (i = 0; i < og.length; i++) {
+              ogData.push({ name: og[i].attributes.property.nodeValue, content: og[i].attributes.content.nodeValue });
+            }
+            this.setState({ ogData });
+            const metaDataOb = [];
+            const meta = doc.getElementsByTagName('meta');
+            let j = 0;
+            for (j = 0; j < meta.length; j++) {
+              if (meta.item(j).name !== '') {
+                metaDataOb.push({ name: meta.item(j).name, content: meta.item(j).content });
+              }
+            }
+            this.setState({ metaData: metaDataOb });
+            this.generateJSON(doc);
+            if (x.readyState === 4) {
+              if (x.status === 200) {
+                this.findDuplicate();
+                let baseUrl = this.state.url.split('/');
+                let readMoreurl = `${baseUrl[2]}`;
+                readMoreurl = readMoreurl.replace('www.', '');
+                const readMore = `<br><a target="_blank" href=${this.state.cleanUrl}>Read on ${readMoreurl}</a>`;
+                // const readMore = `<br>[Read on ${readMoreurl}](${this.state.cleanUrl})`;
+                const pattern = /^((http|https|www):\/\/)/;
+                if (desc && selectedContent === '') {
+                  desc += '<br>';
+                  desc += readMore;
+                  this.setState({
+                    summary: desc,
+                    initialSummary: desc
+                  });
+                } else {
+                  if (selectedContent !== '') {
+                    selectedContent += '<br>';
+                    selectedContent += readMore;
+                  }
+                  this.setState({ summary: selectedContent, initialSummary: selectedContent });
+                }
+                if (title) {
+                  let titleValue = title.split('--');
+                  titleValue = titleValue[0].split(/[»|]/);
+                  titleValue = titleValue[0];
+                  const restTitle = titleValue.substring(0, titleValue.lastIndexOf('-') + 1);
+                  const lastTitle = titleValue.substring(titleValue.lastIndexOf('-') + 1, titleValue.length);
+                  if (siteName) {
+                    if ((lastTitle.toLowerCase()).trim() === (siteName.toLowerCase()).trim()) {
+                      titleValue = restTitle.replace('-', '');
+                      titleValue = titleValue.trim();
+                    }
+                  }
+                  this.setState({ title: titleValue });
+                }
+                if (image) {
+                  image = image.getAttribute('content');
+                  if (!pattern.test(image)) {
+                    baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
+                    image = baseUrl + image;
+                  }
+                  this.setState({ image });
+                }
+                if (favicon) {
+                  if (favicon.startsWith('//')) {
+                    favicon = baseUrl[0] + favicon;
+                  } else if (!pattern.test(favicon)) {
+                    baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
+                    favicon = baseUrl + favicon;
+                  }
+                  const self = this;
+                  urlExists(favicon, (err, exists) => {
+                    if (exists) {
+                      self.setState({ favIcon: favicon });
+                    }
+                  });
+                }
               } else {
-                if (selectedContent !== '') {
-                  selectedContent += '<br>';
-                  selectedContent += readMore;
-                }
-                this.setState({ summary: selectedContent });
-              }
-              if (title) {
-                let titleValue = title.split('--');
-                titleValue = titleValue[0].split(/[»|]/);
-                titleValue = titleValue[0];
-                const restTitle = titleValue.substring(0, titleValue.lastIndexOf('-') + 1);
-                const lastTitle = titleValue.substring(titleValue.lastIndexOf('-') + 1, titleValue.length);
-                if (siteName) {
-                  if ((lastTitle.toLowerCase()).trim() === (siteName.toLowerCase()).trim()) {
-                    titleValue = restTitle.replace('-', '');
-                    titleValue = titleValue.trim();
-                  }
-                }
-                this.setState({ title: titleValue });
-              }
-              if (image) {
-                image = image.getAttribute('content');
-                if (!pattern.test(image)) {
-                  baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
-                  image = baseUrl + image;
-                }
-                this.setState({ image });
-              }
-              if (favicon) {
-                if (favicon.startsWith('//')) {
-                  favicon = baseUrl[0] + favicon;
-                } else if (!pattern.test(favicon)) {
-                  baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
-                  favicon = baseUrl + favicon;
-                }
-                const self = this;
-                urlExists(favicon, (err, exists) => {
-                  if (exists) {
-                    self.setState({ favIcon: favicon });
-                  }
-                });
-              }
-            } else {
-              this.setState({ fetchingContents: false });
-            }
-          }
-          const images = doc.getElementsByTagName('img');
-          const srcList = [];
-          if (image) {
-            srcList.push(image);
-          }
-          for (let i = 0; i < images.length; i++) {
-            const img = images[i].src;
-            const res = img.match(/ajax|email|icon|FB|social|facebook/gi);
-            if ((res == null) && (srcList.indexOf(img) === -1)) {
-              const validUrl = this.checkURL(img);
-              if (validUrl) {
-                srcList.push(img);
+                this.setState({ fetchingContents: false });
               }
             }
+            const images = doc.getElementsByTagName('img');
+            const srcList = [];
+            if (image) {
+              srcList.push(image);
+            }
+            for (let i = 0; i < images.length; i++) {
+              const img = images[i].src;
+              const res = img.match(/ajax|email|icon|FB|social|facebook/gi);
+              if ((res == null) && (srcList.indexOf(img) === -1)) {
+                const validUrl = this.checkURL(img);
+                if (validUrl) {
+                  srcList.push(img);
+                }
+              }
+            }
+            this.setState({ allImages: srcList });
+            this.setState({
+              doc
+            });
+            this.getMeshData();
+          } else {
+            this.setState({ fetchingContents: false });
           }
-          this.setState({ allImages: srcList });
-          this.setState({
-            doc
-          });
-          this.getMeshData();
-        } else {
-          this.setState({ fetchingContents: false });
-        }
-      };
-      x.onerror = (e) => {
-        throw e;
-      };
-      x.send(null);
+        };
+        x.onerror = (e) => {
+          throw e;
+        };
+        x.send(null);
+      }
     });
   }
   checkURL(url) {
@@ -352,7 +350,7 @@ export default class Customform extends Component {
     this.setState({ cleanUrl: event.target.value });
   }
   handleSummary(event) {
-    this.setState({ summary: event.target.value });
+    this.setState({ summary: event.target.value, initialSummary: event.target.value });
   }
   handleContentType(event) {
     this.setState({ contentTypeSelected: event.target.value });
@@ -430,8 +428,6 @@ export default class Customform extends Component {
   getExtLocalConfig = async () => {
     const config = await this.setConfigVal();
     this.setState({ extLocalConfigName: config.projects.dynamicConfig.extnLocalConfig });
-
-
     const jsData = await fetch(`/extLocalConfig/${config.projects.dynamicConfig.extnLocalConfig}`).then(response => response.json()).then((responsoData) => {
       this.setState({ extConfig: responsoData });
       this.setState({ contentType: responsoData.contentType[0].workPackage });
@@ -800,7 +796,7 @@ export default class Customform extends Component {
       const pdfDoc = pdfDoc_;
       pdfDoc.getMetadata().then((stuff) => {
         if (stuff) {
-          this.setState({ title: stuff.info.Title ? stuff.info.Title : 'Pdf Document' });
+          this.setState({ title: stuff.info.Title ? stuff.info.Title : '' });
           this.setState({ fetchingContents: false });
           this.setState({ summary: stuff.info.subject ? stuff.info.subject : '' });
         }
@@ -854,7 +850,13 @@ export default class Customform extends Component {
   }
   replaceWithReadableContentAndMeta() {
     if (!this.state.isPdf) {
-      this.setState({ summary: this.state.domContents });
+      let domData = `<b>Title: </b>${this.state.readabilityTitle}<br>`;
+      domData = `${domData}<b>Excerpt: </b>${this.state.readabilityExcerpt}<br>`;
+      if (this.state.readabilityByline) {
+        domData = `${domData}<b>Byline: </b>${this.state.readabilityByline}<br>`;
+      }
+      domData += this.state.readabilityContent;
+      this.setState({ summary: domData });
     }
   }
   clearImage() {
@@ -869,8 +871,8 @@ export default class Customform extends Component {
   }
   appendReadableContent() {
     if (!this.state.isPdf) {
-      let currentContent = this.state.summary;
-      currentContent = `${currentContent}<br>${this.state.domContents}`;
+      let currentContent = this.state.initialSummary;
+      currentContent = `${currentContent}<br><br>${this.state.domContents}`;
       this.setState({
         summary: currentContent
       });
@@ -890,12 +892,11 @@ export default class Customform extends Component {
                 {this.state.showEdit ?
                   <div id="panel-edit">
                     <form onSubmit={this.handleSubmit} id="homePageForm">
-                      <div className="ds-l-row ds-u-padding--1">
-                        <div className="ds-l-col--11">
-                          <textarea className={[style.textareaTitle, 'preview__label ds-u-font-size--h4 ds-u-font-style--normal'].join(' ')} value={this.state.title} onChange={this.handleChange} />
+                      <div className="ds-l-row ds-u-padding-top--1 ds-u-padding-left--0 ds-u-padding-right--0">
+                        <div className="ds-l-col--12">
+                          <textarea className={this.state.title ? [style.textareaTitle, 'preview__label ds-u-font-size--h4 ds-u-font-style--normal'].join(' ') : [style.titleError, 'ds-u-font-size--base ds-u-font-style--normal'].join(' ')} value={this.state.title} onChange={this.handleChange} placeholder="Title *" />
                         </div>
                       </div>
-
                       <div className="ds-l-row">
                         <div className="ds-l-col--12 preview__label ds-u-font-size--small ds-u-font-style--normal">
                           <CKEditor
@@ -950,7 +951,7 @@ export default class Customform extends Component {
                         {this.state.message === '' && this.state.loader === false ?
                           <div className="ds-l-row">
                             <div className="ds-l-col--auto">
-                              <input type="submit" value="Post to Lectio" className="ds-u-margin-left--1 ds-u-margin-top--1 ds-c-button ds-c-button--primary" /></div>
+                              <input disabled={!this.state.title} type="submit" value="Post to Lectio" className="ds-u-margin-left--1 ds-u-margin-top--1 ds-c-button ds-c-button--primary" /></div>
                             <div className="ds-l-col--auto">
                               {this.state.parentId ? <a className="ds-u-margin-top--1 preview__label ds-u-font-size--base ds-u-font-style--normal" target="_blank" href={`${APIDATA.BASE_URL + APIDATA.SITE_URL + this.state.parentId}/activity`}>{this.state.duplicateMessage}</a> : null}</div>
                           </div> : null}
@@ -965,7 +966,7 @@ export default class Customform extends Component {
                   </div>
                   : null}
                 {this.state.showJsonTree ? <div id="panel-meta">
-                  <ExtractedContent jsonData={this.state.metaDataJSON} articleData={this.state.domContents} onContentChange={this.contentChange} />
+                  <ExtractedContent jsonData={this.state.metaDataJSON} articleTitle={this.state.readabilityTitle} articleExcerpt={this.state.readabilityExcerpt} articleByline={this.state.readabilityByline} articleData={this.state.domContents} onContentChange={this.contentChange} />
                 </div> : null}
                 {this.state.showShare ? <div id="panel-share">
                   <div className="usa-accordion site-accordion-code">
