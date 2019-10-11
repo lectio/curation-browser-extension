@@ -1,6 +1,6 @@
 #homePageForm .ck-editor__editable_inline {
-    min-height: 251px !important;
-    max-height: 251px !important;
+    min-height: 250px !important;
+    max-height: 250px !important;
 }
 #editableMetaContent .ck-editor__editable_inline {
     min-height: 400px !important;

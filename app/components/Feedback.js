@@ -51,8 +51,10 @@ export default class Feedback extends React.Component {
     } else if (!os && /Linux/.test(platform)) {
       os = 'Linux';
     }
-    let descriptionData = `* (Clean URL)[${this.props.cleanUrl}]\n`;
-    descriptionData = `${descriptionData}* (Source URL)[${this.props.siteUrl}]`;
+    const manifestData = chrome.runtime.getManifest();
+    let descriptionData = `<p></p><p></p><a href=${this.props.cleanUrl}>Clean URL</a>`;
+    descriptionData = descriptionData+" | "+"<a href="+this.props.siteUrl+">Source URL</a>";
+    descriptionData = descriptionData + " | Version "+manifestData.version + " on "+ os +","+browserName +" "+version;
     this.setState({
       description: descriptionData,
       osName: os,

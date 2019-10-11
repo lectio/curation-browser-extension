@@ -29,7 +29,7 @@ export default class Customform extends Component {
       cleanUrl: '',
       allImages: [],
       showPopup: false,
-      selectedImage: -1,
+      selectedImage: 0,
       showEdit: true,
       showShare: false,
       showAttachmentTab: false,
@@ -68,7 +68,8 @@ export default class Customform extends Component {
       readabilityExcerpt: '',
       readabilityByline: '',
       readabilityContent: '',
-      initialSummary: ''
+      initialSummary: '',
+      twitterTag: ''
     };
     this.handleChange = this.handleChange.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
@@ -125,7 +126,7 @@ export default class Customform extends Component {
             const siteName = ogSiteName ? ogSiteName.getAttribute('content') : '';
             let desc = '';
             let title = '';
-            let image = doc.querySelector('meta[property="og:image"]');
+            const image = doc.querySelector('meta[property="og:image"]');
             const dcTitle = doc.querySelector('meta[name="DC.Title"]');
             const metaDescription = doc.querySelector('meta[name="description"]');
             const metaTitle = doc.querySelector('meta[name="title"]');
@@ -160,7 +161,7 @@ export default class Customform extends Component {
             } else if (metaDescription && desc === '') {
               desc = metaDescription.getAttribute('content');
             }
-            if (!desc) {
+            if (!desc && article) {
               desc = article.content;
             }
             const ogData = [];
@@ -190,6 +191,7 @@ export default class Customform extends Component {
             if (x.readyState === 4) {
               if (x.status === 200) {
                 this.findDuplicate();
+                const self = this;
                 let baseUrl = this.state.url.split('/');
                 let readMoreurl = `${baseUrl[2]}`;
                 readMoreurl = readMoreurl.replace('www.', '');
@@ -225,12 +227,16 @@ export default class Customform extends Component {
                   this.setState({ title: titleValue });
                 }
                 if (image) {
-                  image = image.getAttribute('content');
-                  if (!pattern.test(image)) {
+                  let ogImage = image.getAttribute('content');
+                  if (!pattern.test(ogImage)) {
                     baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
-                    image = baseUrl + image;
+                    ogImage = baseUrl + ogImage;
                   }
-                  this.setState({ image });
+                  urlExists(ogImage, (err, exists) => {
+                    if (exists) {
+                      this.setState({ image: ogImage });
+                    }
+                  });
                 }
                 if (favicon) {
                   if (favicon.startsWith('//')) {
@@ -239,7 +245,6 @@ export default class Customform extends Component {
                     baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
                     favicon = baseUrl + favicon;
                   }
-                  const self = this;
                   urlExists(favicon, (err, exists) => {
                     if (exists) {
                       self.setState({ favIcon: favicon });
@@ -252,7 +257,7 @@ export default class Customform extends Component {
             }
             const images = doc.getElementsByTagName('img');
             const srcList = [];
-            if (image) {
+            if (this.state.image) {
               srcList.push(image);
             }
             for (let i = 0; i < images.length; i++) {
@@ -333,9 +338,13 @@ export default class Customform extends Component {
     x.onload = (e) => {
       e.preventDefault();
       const doc = x.response;
-      this.setState({ autoClassificationData: { meshData: JSON.parse(doc.body) } });
-      this.setState({ meshData: JSON.parse(doc.body) });
-      this.setState({ showAutoClassificationTab: true });
+      if (doc.body) {
+        try {
+          this.setState({ autoClassificationData: { meshData: JSON.parse(doc.body) } });
+          this.setState({ meshData: JSON.parse(doc.body) });
+          this.setState({ showAutoClassificationTab: true });
+        } catch (error) { }
+      }
     };
     x.onerror = (e) => {
       throw e;
@@ -397,10 +406,13 @@ export default class Customform extends Component {
     });
   }
 
-  handleChangeValue = (e) => {
-    this.setState({ showPopup: e.target.value });
-    this.setState({ selectedImage: e.target.alt });
-    this.setState({ image: this.state.allImages[Number(e.target.alt)] });
+  handleChangeValue = (data) => {
+    this.setState({ showPopup: data.src });
+    this.setState({ image: data.src });
+    if (data.index) {
+      this.setState({ selectedImage: data.index });
+      this.setState({ image: this.state.allImages[Number(data.index)] });
+    }
   }
   signinTab() {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -431,7 +443,7 @@ export default class Customform extends Component {
     const jsData = await fetch(`/extLocalConfig/${config.projects.dynamicConfig.extnLocalConfig}`).then(response => response.json()).then((responsoData) => {
       this.setState({ extConfig: responsoData });
       this.setState({ contentType: responsoData.contentType[0].workPackage });
-      this.setState({ contentTypeSelected: responsoData.contentType[0].workPackage[0].id });
+      // this.setState({ contentTypeSelected: responsoData.contentType[0].workPackage[0].id });
     }).catch((e) => {
       console.log('Json error', e);
     });
@@ -510,23 +522,22 @@ export default class Customform extends Component {
             const fileName = 'Curated_Featured_Image.pdf';
             this.uploadPdf(webPackageId, fileName, myBase64);
           });
-        } else {
+        }
+        if (this.state.image) {
           this.toDataUrl(this.state.image, (myBase64) => {
             const fileName = 'Curated_Featured_Image.png';
             this.uploadImage(webPackageId, fileName, myBase64);
-            this.uploadOgData(webPackageId);
-            this.uploadMeshData(webPackageId);
             if (this.state.parentId) {
               this.createRelation(webPackageId);
             }
-            if (this.state.favIcon) {
-              this.toDataUrl(this.state.favIcon, (base64Content) => {
-                const fileName = 'Curated_Source_FavIcon.png';
-                this.uploadImage(webPackageId, fileName, base64Content);
-              });
-            }
           });
+        } else {
+          this.uploadOgData(webPackageId);
+          if (this.state.parentId) {
+            this.createRelation(webPackageId);
+          }
         }
+        this.uploadMeshData(webPackageId);
         this.setState({ siteUrl: APIDATA.SITE_URL });
         this.setState({ message: `Saved in ${APIDATA.DOMAIN_NAME} as` });
         this.setState({ loader: false });
@@ -566,9 +577,22 @@ export default class Customform extends Component {
       twitterData.push({ name: twitter[i].attributes.property.nodeValue, content: twitter[i].attributes.content.nodeValue });
     }
     const metaData = [];
+    const curatedMetadata = [];
+    this.state.metaData.map((meta, i) => {
+      const metaName = meta.name;
+      if (metaName.includes('twitter:')) {
+        twitterData.push(meta);
+      } else {
+        curatedMetadata.push(meta);
+      }
+    });
     metaData.push({ name: 'Curated OpenGraph', content: this.state.ogData });
     metaData.push({ name: 'Curated Twitter', content: twitterData });
-    metaData.push({ name: 'Curated Meta Data', content: this.state.metaData });
+    metaData.push({ name: 'Curated Meta Data', content: curatedMetadata });
+    this.setState({
+      metaData: curatedMetadata,
+      twitterTag: twitterData
+    });
     const databody = JSON.stringify(metaData);
     this.setState({ metaDataJSON: databody });
   }
@@ -609,7 +633,17 @@ export default class Customform extends Component {
         'X-Requested-With': 'XMLHttpRequest'
       }
     };
-    fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/work_packages/${id}/attachments`, authdata);
+    fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/work_packages/${id}/attachments`, authdata).then((response) => {
+      if (response.status === 201) {
+        // success
+      }
+      return response.json();
+    }).then((res) => {
+      // same function used for fav icon.This checking is to avoid multiple uploads
+      if (fileName === 'Curated_Featured_Image.png') {
+        this.uploadOgData(id);
+      }
+    });
   }
   uploadOgData(id) {
     const ogFile = new Blob([JSON.stringify(this.state.ogData)], { type: 'application/json' });
@@ -685,7 +719,14 @@ export default class Customform extends Component {
     fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/work_packages/${id}/attachments`, authdata);
   }
   uploadMetaData(id) {
-    const metaData = new Blob([JSON.stringify(this.state.metaData)], { type: 'application/json' });
+    const postMetaData = [{
+      name: 'Curated Twitter',
+      content: this.state.twitterTag
+    }, {
+      name: 'Curated Meta Data',
+      content: this.state.metaData
+    }];
+    const metaData = new Blob([JSON.stringify(postMetaData)], { type: 'application/json' });
     const fr = new FileReader();
     fr.readAsText(metaData);
     const databody = JSON.stringify({ fileName: 'Curated_MetaData.json', description: { raw: 'Curated Meta Data' } });
@@ -730,7 +771,19 @@ export default class Customform extends Component {
         'X-Requested-With': 'XMLHttpRequest'
       }
     };
-    fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/work_packages/${id}/attachments`, authdata);
+    fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/work_packages/${id}/attachments`, authdata).then((response) => {
+      if (response.status === 201) {
+        // this.setState({ message: 'Saved Successfully.' });
+      }
+      return response.json();
+    }).then((res) => {
+      if (this.state.favIcon) {
+        this.toDataUrl(this.state.favIcon, (base64Content) => {
+          const curatedFileName = 'Curated_Source_FavIcon.png';
+          this.uploadImage(id, curatedFileName, base64Content);
+        });
+      }
+    });
   }
   activateTabs(event) {
     event.preventDefault();
@@ -939,7 +992,8 @@ export default class Customform extends Component {
                         <div className={[style.cleanUrl, 'ds-l-col--10 ds-u-padding-x--0'].join(' ')}><input type="text" className={this.state.parentId ? [style.textareaLink, 'preview__label ds-u-font-style--normal ds-u-color--white on ds-u-fill--secondary-dark ds-u-padding-x--1'].join(' ') : [style.textareaLink, 'preview__label ds-u-font-style--normal'].join(' ')} value={this.state.cleanUrl} onChange={this.handleUrl} style={this.state.parentId ? { height: '20px' } : { height: '18px' }} /></div>
                       </div>
                       <hr className="on ds-u-fill--gray-lightest ds-u-margin-bottom--0" />
-                      <div className="ds-l-row"><div className="ds-l-col--11"><select className="ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1 ds-u-margin-x--1 ds-u-margin-bottom--0" value={this.state.contentTypeSelected} onChange={e => this.setState({ contentTypeSelected: e.target.value })}>
+                      <div className="ds-l-row"><div className="ds-l-col--12"><select className={this.state.contentTypeSelected ? 'ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1 ds-u-margin-bottom--0 ds-u-padding-left--2' : [style.titleError, 'ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-margin-bottom--0 ds-u-padding-left--2'].join(' ')} value={this.state.contentTypeSelected} onChange={e => this.setState({ contentTypeSelected: e.target.value })}>
+                        <option value="">Select</option>
                         {this.state.contentType.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
                       </select></div></div>
 
@@ -951,7 +1005,7 @@ export default class Customform extends Component {
                         {this.state.message === '' && this.state.loader === false ?
                           <div className="ds-l-row">
                             <div className="ds-l-col--auto">
-                              <input disabled={!this.state.title} type="submit" value="Post to Lectio" className="ds-u-margin-left--1 ds-u-margin-top--1 ds-c-button ds-c-button--primary" /></div>
+                              <input disabled={!this.state.title || !this.state.contentTypeSelected} type="submit" value="Post to Lectio" className="ds-u-margin-left--1 ds-u-margin-top--1 ds-c-button ds-c-button--primary" /></div>
                             <div className="ds-l-col--auto">
                               {this.state.parentId ? <a className="ds-u-margin-top--1 preview__label ds-u-font-size--base ds-u-font-style--normal" target="_blank" href={`${APIDATA.BASE_URL + APIDATA.SITE_URL + this.state.parentId}/activity`}>{this.state.duplicateMessage}</a> : null}</div>
                           </div> : null}
@@ -1000,7 +1054,7 @@ export default class Customform extends Component {
                   text="Close"
                   closePopup={this.togglePopup.bind(this)}
                   images={this.state.allImages}
-                  selectedImage={this.state.allImages}
+                  selectedImage={this.state.selectedImage}
                   onChangeValue={this.handleChangeValue}
                 />
                 </div> : null}

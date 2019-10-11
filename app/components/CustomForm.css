@@ -65,6 +65,15 @@
   max-height: 100px;
   min-height: 80px;
 }
+.ogCreateImage{
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  cursor: pointer;
+  object-fit: contain;
+  max-height: 212px;
+  min-height: 212px;
+}
 .submitButton{
   background-color: #316ea5;
   border: none;
@@ -248,13 +257,14 @@
 
 .textareaTitle{
   border: none;
-  min-height: 30px;
-  padding:0px 3%;
+  min-height: 43px;
+  padding:0px 2%;
   white-space: normal;
   display: block;
   width: 100%;
   margin: 0px;
   resize: none;
+  padding-bottom:3px;
 }
 .textareaDesc{
   border: none;
@@ -277,6 +287,11 @@
 }
 .imageGallery{
   height: 315px;
+  overflow-y: scroll;
+  padding-bottom: 25px;
+}
+.imageGalleryCreateImage{
+  height: 250px !important;
   overflow-y: scroll;
   padding-bottom: 25px;
 }
@@ -415,4 +430,45 @@
   width: 100%;
   resize: none;
   border-color: #D8000C;
+}
+.teamplateContainer {
+  position: relative;
+  text-align: center;
+  color: white;
+  cursor: pointer;
+}
+/* Bottom left text */
+.bottomLeft {
+  position: absolute;
+  bottom: 8px;
+  left: 16px;
+}
+
+/* Top left text */
+.topLeft {
+  position: absolute;
+  top: 8px;
+  left: 16px;
+}
+
+/* Top right text */
+.topRight {
+  position: absolute;
+  top: 8px;
+  right: 16px;
+}
+/* Centered text */
+.templateText {
+  position: absolute;
+  width: 100%;
+  top: 50%;
+  left: 50%;
+  font-family:"tahoma";
+	font-size:18px;
+	line-height:20px;
+	color:#fff;
+  font-weight:700;
+  text-align: center;
+  text-shadow: 1px 1px #222;
+  transform: translate(-50%, -50%);
 }

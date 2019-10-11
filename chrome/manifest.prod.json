@@ -1,5 +1,5 @@
 {
-  "version": "3.0.17",
+  "version": "3.1.2",
   "name": "Lectio",
   "manifest_version": 2,
   "description": "Lectio",
@@ -19,5 +19,5 @@
     "page": "background.html"
   },
   "permissions": [ "contextMenus", "tabs", "storage", "https://github.com/*","https://meshb.nlm.nih.gov/*","https://openproject-devl.netspective.com/*","activeTab","https://*/","http://*/","cookies" ],
-  "content_security_policy": "default-src 'self';connect-src 'self' *; frame-src 'self' *;script-src 'self'; style-src * 'unsafe-inline'; img-src 'self' * data: https: http: blob:;font-src 'self' * data:;"
+  "content_security_policy": "default-src 'self';connect-src 'self' * data:; frame-src 'self' *;script-src 'self'; style-src * 'unsafe-inline'; img-src 'self' * data: https: http: blob:;font-src 'self' * data:;"
 }
