@@ -2,6 +2,8 @@ import React from 'react';
 import htmlToImage from 'html-to-image';
 import { Tabs, TabPanel } from '@cmsgov/design-system-core';
 import style from './CustomForm.css';
+import * as APIDATA from '../constants/apidata';
+
 export default class Popup extends React.Component {
   constructor(props) {
     super(props);
@@ -16,18 +18,19 @@ export default class Popup extends React.Component {
       imgWidth: '',
       text: '',
       templateImages: [],
-      createImage: false
+      createImage: false,
+      externalImage: '',
+      imageAttachError: false
     };
     this.handleClick = this.handleClick.bind(this);
     this.openTab = this.openTab.bind(this);
     this.fileChangedHandler = this.fileChangedHandler.bind(this);
     this.templateSelected = this.templateSelected.bind(this);
     this.convertHtmlToPng = this.convertHtmlToPng.bind(this);
+    this.handleExternalImage = this.handleExternalImage.bind(this);
+    this.attachImage = this.attachImage.bind(this);
   }
   componentDidMount() {
-    fetch('/img/templates/templateNames.json').then(response => response.json()).then((responsoData) => {
-      this.setState({ templateImages: responsoData });
-    });
     if (this.props.images.length > 0) {
       const selectedIndex = this.props.selectedImage;
       const theImage = new Image();
@@ -45,6 +48,23 @@ export default class Popup extends React.Component {
   }
   componentWillUnmount() {
     document.removeEventListener('click', this.openTab);
+  }
+  getTemplateImages() {
+    fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/work_packages/${APIDATA.TEMPLATE_ASSET_ID}`).then(response => response.json()).then((responsoData) => {
+      const responseObject = responsoData._embedded.attachments;
+      if (Number(responseObject.total) > 0) {
+        const attachments = responseObject._embedded.elements;
+        const images = [];
+        attachments.map((attachment, i) => {
+          const temp = {
+            path: APIDATA.BASE_URL + attachment._links.downloadLocation.href,
+            name: attachment._links.self.title
+          };
+          images.push(temp);
+        });
+        this.setState({ templateImages: images });
+      }
+    });
   }
   convertHtmlToPng(nodeId) {
     const self = this;
@@ -70,7 +90,7 @@ export default class Popup extends React.Component {
           .catch((error) => {
             reject(error);
           });
-      }, 50);
+      }, 500);
     }));
   }
   templateSelected = (event) => {
@@ -87,7 +107,33 @@ export default class Popup extends React.Component {
     });
   }
   fileChangedHandler = (event) => {
-    this.setState({ src: event.target.files[0] });
+    this.setState({ src: URL.createObjectURL(event.target.files[0]) });
+    const tempObject = {
+      src: URL.createObjectURL(event.target.files[0]),
+      index: null
+    };
+    this.setState({ createImage: true });
+    this.state.probs.onChangeValue(tempObject);
+  }
+  attachImage() {
+    if (this.state.externalImage) {
+      let url = this.state.externalImage;
+      url = url.split('?');
+      url = url[0];
+      if (url.match(/\.(jpeg|jpg|gif|png)$/) != null) {
+        this.setState({ imageAttachError: false });
+        this.setState({ src: this.state.externalImage });
+        const tempObject = {
+          src: this.state.externalImage,
+          index: event.target.alt
+        };
+        this.state.probs.onChangeValue(tempObject);
+      } else {
+        this.setState({ imageAttachError: true });
+      }
+    } else {
+      this.setState({ imageAttachError: true });
+    }
   }
   textChangedHandler = (event) => {
     this.setState({ text: event.target.value });
@@ -115,7 +161,12 @@ export default class Popup extends React.Component {
       this.setState({ createImage: false });
     } else if (event.target.id === 'ds-c-tabs__item--article') {
       this.setState({ createImage: false });
+    } else if (event.target.id === 'ds-c-tabs__item--create') {
+      this.getTemplateImages();
     }
+  }
+  handleExternalImage(event) {
+    this.setState({ externalImage: event.target.value });
   }
   render() {
     return (
@@ -146,9 +197,18 @@ export default class Popup extends React.Component {
                 </div>
               </TabPanel>
               <TabPanel id="custom" tab="Custom image">
-                <div>
-                  <input className="ds-c-field ds-u-border--1" id="input-text" type="text" />
-                  <input className="ds-c-field" id="input-file" type="file" onChange={this.fileChangedHandler} />
+                <div className="ds-l-row">
+                  <div className="ds-l-col--9">
+                    <input className={this.state.imageAttachError ? [style.titleError, 'ds-c-field'].join(' ') : 'ds-c-field ds-u-border--1'} id="external-attachment" type="text" value={this.state.externalImage} onChange={e => this.handleExternalImage(e)} placeholder="External Image URL to download and attach" required />
+                  </div>
+                  <div className="ds-l-col--3">
+                    <button onClick={this.attachImage} className="ds-u-margin-top--1 ds-c-button ds-c-button--small ds-c-button--primary">Attach</button>
+                  </div>
+                </div>
+                <div className="ds-l-row">
+                  <div className="ds-l-col">
+                    <input className="ds-c-field" id="input-file" type="file" onChange={this.fileChangedHandler} />
+                  </div>
                 </div>
               </TabPanel>
               <TabPanel id="create" tab="Create image" className={this.state.createImage ? style.imageGalleryCreateImage : style.imageGallery}>

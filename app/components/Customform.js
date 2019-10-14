@@ -226,6 +226,7 @@ export default class Customform extends Component {
                   }
                   this.setState({ title: titleValue });
                 }
+                const allImages = doc.getElementsByTagName('img');
                 if (image) {
                   let ogImage = image.getAttribute('content');
                   if (!pattern.test(ogImage)) {
@@ -236,7 +237,10 @@ export default class Customform extends Component {
                     if (exists) {
                       this.setState({ image: ogImage });
                     }
+                    this.setAllImages(allImages);
                   });
+                } else {
+                  this.setAllImages(allImages);
                 }
                 if (favicon) {
                   if (favicon.startsWith('//')) {
@@ -251,29 +255,13 @@ export default class Customform extends Component {
                     }
                   });
                 }
+                this.setState({
+                  doc
+                });
               } else {
                 this.setState({ fetchingContents: false });
               }
             }
-            const images = doc.getElementsByTagName('img');
-            const srcList = [];
-            if (this.state.image) {
-              srcList.push(image);
-            }
-            for (let i = 0; i < images.length; i++) {
-              const img = images[i].src;
-              const res = img.match(/ajax|email|icon|FB|social|facebook/gi);
-              if ((res == null) && (srcList.indexOf(img) === -1)) {
-                const validUrl = this.checkURL(img);
-                if (validUrl) {
-                  srcList.push(img);
-                }
-              }
-            }
-            this.setState({ allImages: srcList });
-            this.setState({
-              doc
-            });
             this.getMeshData();
           } else {
             this.setState({ fetchingContents: false });
@@ -289,6 +277,24 @@ export default class Customform extends Component {
   checkURL(url) {
     return (url.match(/\.(jpeg|jpg|gif|png)$/) != null);
   }
+  setAllImages(images) {
+    const srcList = [];
+    if (this.state.image) {
+      srcList.push(this.state.image);
+    }
+    for (let i = 0; i < images.length; i++) {
+      const img = images[i].src;
+      const res = img.match(/ajax|email|icon|FB|social|facebook/gi);
+      if ((res == null) && (srcList.indexOf(img) === -1)) {
+        const validUrl = this.checkURL(img);
+        if (validUrl) {
+          srcList.push(img);
+        }
+      }
+    }
+    this.setState({ allImages: srcList });
+  }
+
   findDuplicate() {
     const cleanUrl = this.state.cleanUrl;
     const filterByCleanUrl = `filters=[{"${APIDATA.cleanUrlField}":{"operator":"~","values":["${encodeURIComponent(cleanUrl)}"]}}]`;
@@ -598,7 +604,12 @@ export default class Customform extends Component {
   }
 
   generateCleanURL(url) {
-    this.cleanUrl = url.replace(/(\?)utm[^&]*(?:&utm[^&]*)*&(?=(?!utm[^\s&=]*=)[^\s&=]+=)|\?utm[^&]*(?:&utm[^&]*)*$|&utm[^&]*/gi, '$1');
+    let urlTemp = url;
+    if (url.indexOf('?ec=') > -1) {
+      urlTemp = url.split('?ec=');
+      urlTemp = urlTemp[0];
+    }
+    this.cleanUrl = urlTemp.replace(/(\?)utm[^&]*(?:&utm[^&]*)*&(?=(?!utm[^\s&=]*=)[^\s&=]+=)|\?utm[^&]*(?:&utm[^&]*)*$|&utm[^&]*/gi, '');
     return this.cleanUrl;
   }
 
