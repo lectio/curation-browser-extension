@@ -53,7 +53,7 @@ export default class ExtractedContent extends React.Component {
         </h4>
         <div id="editableMetaContent" className="usa-accordion__content usa-prose ds-u-overflow--hidden ds-u-padding-top--0 ds-u-padding-left--1">
           <div className="ds-u-margin-left--1" style={{ height: '427px' }}>
-            <div className="ds-l-row ds-u-margin-top--0 preview__label ds-u-font-size--small ds-u-font-style--normal">
+            <div className="ds-l-row ds-u-margin-top--0 preview__label ds-u-font-style--normal">
               <CKEditor
                 editor={ClassicEditor}
                 config={{

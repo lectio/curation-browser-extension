@@ -93,184 +93,197 @@ export default class Customform extends Component {
   }
   componentDidMount() {
     this.authenticate();
-
     if (this.state.isLogin) {
       this.getExtLocalConfig();
     }
-
-    let selectedContent = '';
-    chrome.tabs.executeScript({
-      code: 'window.getSelection().toString();'
-    }, (selection) => {
-      if (selection[0]) {
-        selectedContent = selection[0];
-      }
-    });
-
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const tabUrl = tabs[0].url;
-      this.setState({ url: tabUrl, cleanUrl: this.generateCleanURL(tabUrl) });
-      if (this.isPdfLink(tabUrl) == 'pdf') {
-        this.metadataReading(tabUrl);
-      } else {
-        const x = new XMLHttpRequest();
-        x.open('GET', tabUrl);
-        x.responseType = 'document';
-        x.onload = (e) => {
-          e.preventDefault();
-          const doc = x.response;
-          if (doc) {
-            const ogTitle = doc.querySelector('meta[property="og:title"]');
-            const ogDesc = doc.querySelector('meta[property="og:description"]');
-            const ogSiteName = doc.querySelector('meta[property="og:site_name"]');
-            const siteName = ogSiteName ? ogSiteName.getAttribute('content') : '';
-            let desc = '';
-            let title = '';
-            const image = doc.querySelector('meta[property="og:image"]');
-            const dcTitle = doc.querySelector('meta[name="DC.Title"]');
-            const metaDescription = doc.querySelector('meta[name="description"]');
-            const metaTitle = doc.querySelector('meta[name="title"]');
-            const titleTag = doc.querySelector('title').innerHTML;
-            const article = new Readability(doc).parse();
-            if (article) {
-              this.setState({
-                mozilaReadability: article,
-                readabilityTitle: article.title,
-                readabilityExcerpt: article.excerpt,
-                readabilityByline: article.byline,
-                readabilityContent: article.content,
-                domContents: article.content,
-                domInitial: article.content,
-              });
+      if (tabs) {
+        const tabUrl = tabs[0].url;
+        const pattern = /^((http|https|www):\/\/)/;
+        let selectedContent = '';
+        if (pattern.test(tabUrl)) {
+          chrome.tabs.executeScript({
+            code: 'window.getSelection().toString();'
+          }, (selection) => {
+            if (selection && selection[0]) {
+              selectedContent = selection[0];
             }
-            if (ogTitle) {
-              title = ogTitle.getAttribute('content');
-            } else if (dcTitle && title === '') {
-              title = dcTitle.getAttribute('content');
-            } else if (metaTitle && title === '') {
-              title = metaTitle.getAttribute('content');
-            } else if (titleTag && title === '') {
-              title = titleTag;
+          });
+        }
+        this.setState({ url: tabUrl, cleanUrl: this.generateCleanURL(tabUrl) });
+        const isPDF = this.isPdfLink(tabUrl);
+        isPDF.then((pdfResponse) => {
+          if (pdfResponse === 'pdf') {
+            if (tabUrl.indexOf('http://') === 0 || tabUrl.indexOf('https://') === 0) {
+              this.findDuplicate();
+              this.metadataReading(tabUrl);
+            } else {
+              this.setState({ fetchingContents: false });
             }
-            title = title.trim();
-            if (!title) {
-              title = article.title;
-            }
-            if (ogDesc) {
-              desc = ogDesc.getAttribute('content');
-            } else if (metaDescription && desc === '') {
-              desc = metaDescription.getAttribute('content');
-            }
-            if (!desc && article) {
-              desc = article.content;
-            }
-            const ogData = [];
-            const og = doc.querySelectorAll("meta[property^='og']");
-            let favicon;
-            const nodeList = doc.querySelectorAll('link');
-            for (let i = 0; i < nodeList.length; i++) {
-              if ((nodeList[i].getAttribute('rel') === 'icon') || (nodeList[i].getAttribute('rel') === 'shortcut icon')) {
-                favicon = nodeList[i].getAttribute('href');
-              }
-            }
-            let i = 0;
-            for (i = 0; i < og.length; i++) {
-              ogData.push({ name: og[i].attributes.property.nodeValue, content: og[i].attributes.content.nodeValue });
-            }
-            this.setState({ ogData });
-            const metaDataOb = [];
-            const meta = doc.getElementsByTagName('meta');
-            let j = 0;
-            for (j = 0; j < meta.length; j++) {
-              if (meta.item(j).name !== '') {
-                metaDataOb.push({ name: meta.item(j).name, content: meta.item(j).content });
-              }
-            }
-            this.setState({ metaData: metaDataOb });
-            this.generateJSON(doc);
-            if (x.readyState === 4) {
-              if (x.status === 200) {
-                this.findDuplicate();
-                const self = this;
-                let baseUrl = this.state.url.split('/');
-                let readMoreurl = `${baseUrl[2]}`;
-                readMoreurl = readMoreurl.replace('www.', '');
-                const readMore = `<br><a target="_blank" href=${this.state.cleanUrl}>Read on ${readMoreurl}</a>`;
-                // const readMore = `<br>[Read on ${readMoreurl}](${this.state.cleanUrl})`;
-                const pattern = /^((http|https|www):\/\/)/;
-                if (desc && selectedContent === '') {
-                  desc += '<br>';
-                  desc += readMore;
+          } else {
+            const x = new XMLHttpRequest();
+            x.open('GET', tabUrl);
+            x.responseType = 'document';
+            x.onload = (e) => {
+              e.preventDefault();
+              const doc = x.response;
+              if (doc) {
+                const ogTitle = doc.querySelector('meta[property="og:title"]');
+                const ogDesc = doc.querySelector('meta[property="og:description"]');
+                const ogSiteName = doc.querySelector('meta[property="og:site_name"]');
+                const siteName = ogSiteName ? ogSiteName.getAttribute('content') : '';
+                let desc = '';
+                let title = '';
+                const image = doc.querySelector('meta[property="og:image"]');
+                const dcTitle = doc.querySelector('meta[name="DC.Title"]');
+                const metaDescription = doc.querySelector('meta[name="description"]');
+                const metaTitle = doc.querySelector('meta[name="title"]');
+                const titleTag = doc.querySelector('title').innerHTML;
+                const article = new Readability(doc).parse();
+                if (article) {
                   this.setState({
-                    summary: desc,
-                    initialSummary: desc
-                  });
-                } else {
-                  if (selectedContent !== '') {
-                    selectedContent += '<br>';
-                    selectedContent += readMore;
-                  }
-                  this.setState({ summary: selectedContent, initialSummary: selectedContent });
-                }
-                if (title) {
-                  let titleValue = title.split('--');
-                  titleValue = titleValue[0].split(/[»|]/);
-                  titleValue = titleValue[0];
-                  const restTitle = titleValue.substring(0, titleValue.lastIndexOf('-') + 1);
-                  const lastTitle = titleValue.substring(titleValue.lastIndexOf('-') + 1, titleValue.length);
-                  if (siteName) {
-                    if ((lastTitle.toLowerCase()).trim() === (siteName.toLowerCase()).trim()) {
-                      titleValue = restTitle.replace('-', '');
-                      titleValue = titleValue.trim();
-                    }
-                  }
-                  this.setState({ title: titleValue });
-                }
-                const allImages = doc.getElementsByTagName('img');
-                if (image) {
-                  let ogImage = image.getAttribute('content');
-                  if (!pattern.test(ogImage)) {
-                    baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
-                    ogImage = baseUrl + ogImage;
-                  }
-                  urlExists(ogImage, (err, exists) => {
-                    if (exists) {
-                      this.setState({ image: ogImage });
-                    }
-                    this.setAllImages(allImages);
-                  });
-                } else {
-                  this.setAllImages(allImages);
-                }
-                if (favicon) {
-                  if (favicon.startsWith('//')) {
-                    favicon = baseUrl[0] + favicon;
-                  } else if (!pattern.test(favicon)) {
-                    baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
-                    favicon = baseUrl + favicon;
-                  }
-                  urlExists(favicon, (err, exists) => {
-                    if (exists) {
-                      self.setState({ favIcon: favicon });
-                    }
+                    mozilaReadability: article,
+                    readabilityTitle: article.title,
+                    readabilityExcerpt: article.excerpt,
+                    readabilityByline: article.byline,
+                    readabilityContent: article.content,
+                    domContents: article.content,
+                    domInitial: article.content,
                   });
                 }
-                this.setState({
-                  doc
-                });
+                if (ogTitle) {
+                  title = ogTitle.getAttribute('content');
+                } else if (dcTitle && title === '') {
+                  title = dcTitle.getAttribute('content');
+                } else if (metaTitle && title === '') {
+                  title = metaTitle.getAttribute('content');
+                } else if (titleTag && title === '') {
+                  title = titleTag;
+                }
+                title = title.trim();
+                if (!title) {
+                  title = article.title;
+                }
+                if (ogDesc) {
+                  desc = ogDesc.getAttribute('content');
+                } else if (metaDescription && desc === '') {
+                  desc = metaDescription.getAttribute('content');
+                }
+                if (!desc && article) {
+                  desc = article.content;
+                }
+                const ogData = [];
+                const og = doc.querySelectorAll("meta[property^='og']");
+                let favicon;
+                const nodeList = doc.querySelectorAll('link');
+                for (let i = 0; i < nodeList.length; i++) {
+                  if ((nodeList[i].getAttribute('rel') === 'icon') || (nodeList[i].getAttribute('rel') === 'shortcut icon')) {
+                    favicon = nodeList[i].getAttribute('href');
+                  }
+                }
+                let i = 0;
+                for (i = 0; i < og.length; i++) {
+                  ogData.push({ name: og[i].attributes.property.nodeValue, content: og[i].attributes.content.nodeValue });
+                }
+                this.setState({ ogData });
+                const metaDataOb = [];
+                const meta = doc.getElementsByTagName('meta');
+                let j = 0;
+                for (j = 0; j < meta.length; j++) {
+                  if (meta.item(j).name !== '') {
+                    metaDataOb.push({ name: meta.item(j).name, content: meta.item(j).content });
+                  }
+                }
+                this.setState({ metaData: metaDataOb });
+                this.generateJSON(doc);
+                if (x.readyState === 4) {
+                  if (x.status === 200) {
+                    this.findDuplicate();
+                    const self = this;
+                    let baseUrl = this.state.url.split('/');
+                    let readMoreurl = `${baseUrl[2]}`;
+                    readMoreurl = readMoreurl.replace('www.', '');
+                    const readMore = `<br><a target="_blank" href=${this.state.cleanUrl}>Read on ${readMoreurl}</a>`;
+                    // const readMore = `<br>[Read on ${readMoreurl}](${this.state.cleanUrl})`;
+                    if (desc && selectedContent === '') {
+                      desc += '<br>';
+                      desc += readMore;
+                      this.setState({
+                        summary: desc
+                      });
+                    } else {
+                      if (selectedContent !== '') {
+                        selectedContent += '<br>';
+                        selectedContent += readMore;
+                      }
+                      this.setState({ summary: selectedContent });
+                    }
+                    if (title) {
+                      let titleValue = title.split('--');
+                      titleValue = titleValue[0].split(/[»|]/);
+                      titleValue = titleValue[0];
+                      const restTitle = titleValue.substring(0, titleValue.lastIndexOf('-') + 1);
+                      const lastTitle = titleValue.substring(titleValue.lastIndexOf('-') + 1, titleValue.length);
+                      if (siteName) {
+                        if ((lastTitle.toLowerCase()).trim() === (siteName.toLowerCase()).trim()) {
+                          titleValue = restTitle.replace('-', '');
+                          titleValue = titleValue.trim();
+                        }
+                      }
+                      this.setState({ title: titleValue });
+                    }
+                    const allImages = doc.getElementsByTagName('img');
+                    if (image) {
+                      let ogImage = image.getAttribute('content');
+                      if (!pattern.test(ogImage)) {
+                        baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
+                        ogImage = baseUrl + ogImage;
+                      }
+                      urlExists(ogImage, (err, exists) => {
+                        if (exists) {
+                          this.setState({ image: ogImage });
+                        }
+                        this.setAllImages(allImages);
+                      });
+                    } else {
+                      this.setAllImages(allImages);
+                    }
+                    if (favicon) {
+                      if (favicon.startsWith('//')) {
+                        favicon = baseUrl[0] + favicon;
+                      } else if (!pattern.test(favicon)) {
+                        baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
+                        favicon = baseUrl + favicon;
+                      }
+                      urlExists(favicon, (err, exists) => {
+                        if (exists) {
+                          self.setState({ favIcon: favicon });
+                        }
+                      });
+                    }
+                    this.setState({
+                      doc
+                    });
+                  } else {
+                    this.setState({ fetchingContents: false });
+                  }
+                }
+                this.getMeshData();
               } else {
                 this.setState({ fetchingContents: false });
               }
+            };
+            x.onerror = (e) => {
+              this.setState({ fetchingContents: false });
+              throw e;
+            };
+            if (pattern.test(tabUrl)) {
+              x.send(null);
+            } else {
+              this.setState({ fetchingContents: false });
             }
-            this.getMeshData();
-          } else {
-            this.setState({ fetchingContents: false });
           }
-        };
-        x.onerror = (e) => {
-          throw e;
-        };
-        x.send(null);
+        });
       }
     });
   }
@@ -365,7 +378,7 @@ export default class Customform extends Component {
     this.setState({ cleanUrl: event.target.value });
   }
   handleSummary(event) {
-    this.setState({ summary: event.target.value, initialSummary: event.target.value });
+    this.setState({ summary: event.target.value });
   }
   handleContentType(event) {
     this.setState({ contentTypeSelected: event.target.value });
@@ -543,7 +556,12 @@ export default class Customform extends Component {
             this.createRelation(webPackageId);
           }
         }
-        this.uploadMeshData(webPackageId);
+        if (this.state.favIcon) {
+          this.toDataUrl(this.state.favIcon, (base64Content) => {
+            const curatedFileName = 'Curated_Source_FavIcon.png';
+            this.uploadImage(webPackageId, curatedFileName, base64Content);
+          });
+        }
         this.setState({ siteUrl: APIDATA.SITE_URL });
         this.setState({ message: `Saved in ${APIDATA.DOMAIN_NAME} as` });
         this.setState({ loader: false });
@@ -657,13 +675,32 @@ export default class Customform extends Component {
     });
   }
   uploadOgData(id) {
-    const ogFile = new Blob([JSON.stringify(this.state.ogData)], { type: 'application/json' });
+    let postMetaData = [{
+      name: 'openGraphMetaData',
+      content: this.state.ogData
+    },
+    {
+      name: 'twitterMetaData',
+      content: this.state.twitterTag
+    }, {
+      name: 'htmlMetaData',
+      content: this.state.metaData
+    }, {
+      name: 'pubMedMedlinesSimilarArticles',
+      content: this.state.meshData
+    }];
+    let uploadFileName = 'Lectio_Extension_Curation.json';
+    if (this.state.isPdf) {
+      uploadFileName = 'Curated PDF Meta Data.json';
+      postMetaData = this.state.pdfMetaData ? this.state.pdfMetaData : [];
+    }
+    const metaData = new Blob([JSON.stringify(postMetaData)], { type: 'application/json' });
     const fr = new FileReader();
-    fr.readAsText(ogFile);
-    const databody = JSON.stringify({ fileName: 'Curated_OpenGraph.json', description: { raw: 'Curated OpenGraph' } });
+    fr.readAsText(metaData);
+    const databody = JSON.stringify({ fileName: uploadFileName, description: { raw: 'Lectio Extension Curation' } });
     const formBody = new FormData();
     formBody.append('metadata', databody);
-    formBody.append('file', ogFile, 'Curated_OpenGraph.json');
+    formBody.append('file', metaData, uploadFileName);
     const authdata = {
       method: 'POST',
       body: formBody,
@@ -679,7 +716,7 @@ export default class Customform extends Component {
       }
       return response.json();
     }).then((res) => {
-      this.uploadMetaData(id);
+      this.uploadReadableContent(id);
     });
   }
   uploadReadableContent(id) {
@@ -729,72 +766,8 @@ export default class Customform extends Component {
     };
     fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/work_packages/${id}/attachments`, authdata);
   }
-  uploadMetaData(id) {
-    const postMetaData = [{
-      name: 'Curated Twitter',
-      content: this.state.twitterTag
-    }, {
-      name: 'Curated Meta Data',
-      content: this.state.metaData
-    }];
-    const metaData = new Blob([JSON.stringify(postMetaData)], { type: 'application/json' });
-    const fr = new FileReader();
-    fr.readAsText(metaData);
-    const databody = JSON.stringify({ fileName: 'Curated_MetaData.json', description: { raw: 'Curated Meta Data' } });
-    const formBody = new FormData();
-    formBody.append('metadata', databody);
-    formBody.append('file', metaData, 'Curated_MetaData.json');
-    const authdata = {
-      method: 'POST',
-      body: formBody,
-      credentials: 'include',
-      headers: {
-        // 'Authorization': 'Basic ' + btoa('apikey:' + this.state.apiKey),
-        'X-Requested-With': 'XMLHttpRequest'
-      }
-    };
-    fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/work_packages/${id}/attachments`, authdata).then((response) => {
-      if (response.status === 201) {
-        // this.setState({ message: 'Saved Successfully.' });
-      }
-      return response.json();
-    }).then((res) => {
-      this.uploadReadableContent(id);
-    });
-  }
   contentChange = (changeData) => {
     this.setState({ domContents: changeData });
-  }
-  uploadMeshData(id) {
-    const ogFile = new Blob([JSON.stringify(this.state.meshData)], { type: 'application/json' });
-    const fr = new FileReader();
-    fr.readAsText(ogFile);
-    const databody = JSON.stringify({ fileName: 'PubMed_Medlines_Similar_Articles.json', description: { raw: 'PubMed Medlines Similar Articles' } });
-    const formBody = new FormData();
-    formBody.append('metadata', databody);
-    formBody.append('file', ogFile, 'PubMed_Medlines_Similar_Articles.json');
-    const authdata = {
-      method: 'POST',
-      body: formBody,
-      credentials: 'include',
-      headers: {
-        // 'Authorization': 'Basic ' + btoa('apikey:' + this.state.apiKey),
-        'X-Requested-With': 'XMLHttpRequest'
-      }
-    };
-    fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/work_packages/${id}/attachments`, authdata).then((response) => {
-      if (response.status === 201) {
-        // this.setState({ message: 'Saved Successfully.' });
-      }
-      return response.json();
-    }).then((res) => {
-      if (this.state.favIcon) {
-        this.toDataUrl(this.state.favIcon, (base64Content) => {
-          const curatedFileName = 'Curated_Source_FavIcon.png';
-          this.uploadImage(id, curatedFileName, base64Content);
-        });
-      }
-    });
   }
   activateTabs(event) {
     event.preventDefault();
@@ -847,32 +820,33 @@ export default class Customform extends Component {
     });
   }
   isPdfLink(url) {
-    let thisHrefExt = url.split('.');
-    thisHrefExt = thisHrefExt[thisHrefExt.length - 1];
-    if (thisHrefExt.toLowerCase() == 'pdf') { //If the extension is "pdf" (case insensitive)...
-      return 'pdf';
-    }
-    return 'html';
+    return new Promise(((resolve, reject) => {
+      fetch(url).then((response) => {
+        const contentType = response.headers.get('content-type');
+        if (contentType === 'application/pdf') {
+          resolve('pdf');
+        } else {
+          resolve('html');
+        }
+      });
+    }));
   }
-
   metadataReading(url) {
-    pdf.getDocument(url).then((pdfDoc_) => {
+    const loadingTask = pdf.getDocument(url);
+    loadingTask.promise.then((pdfDoc_) => {
       const pdfDoc = pdfDoc_;
       pdfDoc.getMetadata().then((stuff) => {
         if (stuff) {
-          this.setState({ title: stuff.info.Title ? stuff.info.Title : '' });
-          this.setState({ fetchingContents: false });
-          this.setState({ summary: stuff.info.subject ? stuff.info.subject : '' });
+          this.setState({ title: stuff.info.Title ? stuff.info.Title : '',
+            fetchingContents: false,
+            summary: stuff.info.subject ? stuff.info.subject : '',
+            pdfMetaData: stuff.metadata
+          });
         }
-        // this.setState({ loader: false });
-        //this.setState({ message: stuff.info.Title });
         this.setState({ isPdf: true });
       }).catch((err) => {
         console.log(err);
       });
-    }).catch((err) => {
-      console.log(`Error getting PDF from ${url}`);
-      console.log(err);
     });
   }
   uploadPdf(id, fileName, data) {
@@ -935,7 +909,7 @@ export default class Customform extends Component {
   }
   appendReadableContent() {
     if (!this.state.isPdf) {
-      let currentContent = this.state.initialSummary;
+      let currentContent = this.state.summary;
       currentContent = `${currentContent}<br><br>${this.state.domContents}`;
       this.setState({
         summary: currentContent
@@ -1046,15 +1020,15 @@ export default class Customform extends Component {
                     </h4>
                     {this.state.showAutoClassificationTab ?
                       <div id="metaDataContent" className="usa-accordion__content usa-prose">
-                        <div className="ds-u-margin-left--1 ds-u-font-size--small" style={{ height: '500px' }}>
+                        <div className="ds-u-margin-left--1 preview__label ds-u-font-style--normal" style={{ height: '500px' }}>
                           <h4>NIH Medical Subjects Heading (MeSH)</h4>
-                          {this.state.autoClassificationData.meshData.MoD_Raw.Term_List.map(type => <div><label><input type="checkbox" value={type.term} /><span>{type.Term}</span>
+                          {this.state.autoClassificationData.meshData.MoD_Raw.Term_List.map(type => <div><label><input type="checkbox" value={type.term} /><span className="ds-u-padding-left--1" >{type.Term}</span>
                           </label></div>)
                           }
                         </div>
                       </div>
                       :
-                      <button className="ds-u-margin-left--1 ds-u-margin-top--1 ds-c-button ds-c-button--primary">
+                      <button className="ds-u-margin--1 ds-c-button ds-c-button--primary">
                         <span className="ds-c-spinner ds-c-spinner--small ds-c-spinner--inverse" aria-valuetext="Fetching classifications from NIH Medical Subject Headings (MeSH)" role="progressbar" /> Fetching classifications from NIH Medical Subject Headings (MeSH)
                       </button>
                     }
