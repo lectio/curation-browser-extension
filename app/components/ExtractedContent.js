@@ -46,12 +46,12 @@ export default class ExtractedContent extends React.Component {
         <h4 className="usa-accordion__heading site-accordion-code">
           <button
             className="usa-accordion__button"
-            aria-expanded="true"
+            aria-expanded="false"
             aria-controls="editableMetaContent"
           >Readable content (editable)
           </button>
         </h4>
-        <div id="editableMetaContent" className="usa-accordion__content usa-prose ds-u-overflow--hidden ds-u-padding-top--0 ds-u-padding-left--1">
+        <div id="editableMetaContent" className="usa-accordion__content usa-prose ds-u-overflow--hidden ds-u-padding-top--0 ds-u-padding-left--1" hidden>
           <div className="ds-u-margin-left--1" style={{ height: '427px' }}>
             <div className="ds-l-row ds-u-margin-top--0 preview__label ds-u-font-style--normal">
               <CKEditor
@@ -82,7 +82,20 @@ export default class ExtractedContent extends React.Component {
         </h4>
         <div id="metaDataContent" className="usa-accordion__content usa-prose" hidden>
           <div className="ds-u-margin--0 ds-u-font-size--small" style={{ height: '392px' }}>
-            <JSONPretty id="json-pretty" data={this.props.jsonData} contentEditable />
+            <JSONPretty id="json-pretty" data={this.props.jsonData} />
+          </div>
+        </div>
+        <h4 className="usa-accordion__heading site-accordion-code">
+          <button
+            className="usa-accordion__button"
+            aria-expanded="false"
+            aria-controls="rssFeedContent"
+          >Rss Feed
+          </button>
+        </h4>
+        <div id="rssFeedContent" className="usa-accordion__content usa-prose" hidden>
+          <div className="ds-u-margin--0 ds-u-font-size--small" style={{ height: '392px' }}>
+            {this.props.rssFeed.length > 0 ? <JSONPretty id="rss-feed-pretty" data={this.props.rssFeed} /> : null }
           </div>
         </div>
       </div>

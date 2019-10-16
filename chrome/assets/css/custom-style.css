@@ -27,3 +27,16 @@
     border-left:0px !important;
     border-right:0px !important;
 }
+#rss-feed-pretty .__json-pretty__{
+    min-height: 345px !important;
+}
+#rssFeedContent ul{
+    border-radius: 3px !important;
+    padding: 2px 10px!important;
+    background-color: #eae8e8 !important;
+}
+#rssFeedContent ul li, #rssFeedContent ul label, #rssFeedContent ul span {
+    color:#000!important;
+    font-weight: 500!important;
+    font-size: 16px!important;
+}

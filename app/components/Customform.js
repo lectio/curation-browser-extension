@@ -1,6 +1,7 @@
 import React, { Component } from 'react';
 import style from './CustomForm.css';
 import ExtractedContent from './ExtractedContent';
+import ShareContent from './ShareContent';
 import Feedback from './Feedback';
 import Popup from './Popup';
 import CKEditor from '@ckeditor/ckeditor5-react';
@@ -60,7 +61,6 @@ export default class Customform extends Component {
       contentTypeSelected: '',
       doc: '',
       domInitial: '',
-      autoClassificationData: [],
       showAutoClassificationTab: false,
       mozilaReadability: '',
       isPdf: false,
@@ -69,7 +69,10 @@ export default class Customform extends Component {
       readabilityByline: '',
       readabilityContent: '',
       initialSummary: '',
-      twitterTag: ''
+      twitterTag: '',
+      meshData: [],
+      extractedKeyWords: [],
+      rssFeed: []
     };
     this.handleChange = this.handleChange.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
@@ -81,8 +84,8 @@ export default class Customform extends Component {
     this.signinTab = this.signinTab.bind(this);
     this.checkURL = this.checkURL.bind(this);
     this.getCookies = this.getCookies.bind(this);
-    this.getMeshData = this.getMeshData.bind(this);
     this.contentChange = this.contentChange.bind(this);
+    this.shareDataChange = this.shareDataChange.bind(this);
     this.metadataReading = this.metadataReading.bind(this);
     this.isPdfLink = this.isPdfLink.bind(this);
     this.replaceWithReadableContent = this.replaceWithReadableContent.bind(this);
@@ -139,6 +142,7 @@ export default class Customform extends Component {
                 const metaDescription = doc.querySelector('meta[name="description"]');
                 const metaTitle = doc.querySelector('meta[name="title"]');
                 const titleTag = doc.querySelector('title').innerHTML;
+                const rssFeeds = doc.querySelectorAll('link[type="application/rss+xml"]');
                 const article = new Readability(doc).parse();
                 if (article) {
                   this.setState({
@@ -195,6 +199,20 @@ export default class Customform extends Component {
                   }
                 }
                 this.setState({ metaData: metaDataOb });
+                if (rssFeeds.length > 0) {
+                  let n = 0;
+                  const rssFeedData = [];
+                  for (n = 0; n < rssFeeds.length; n++) {
+                    const rssUrl = rssFeeds[n].getAttribute('href');
+                    const rssTitle = rssFeeds[n].getAttribute('title');
+                    const tempObj = {
+                      url: rssUrl,
+                      title: rssTitle
+                    };
+                    rssFeedData.push(tempObj);
+                  }
+                  this.setState({ rssFeed: rssFeedData });
+                }
                 this.generateJSON(doc);
                 if (x.readyState === 4) {
                   if (x.status === 200) {
@@ -268,7 +286,6 @@ export default class Customform extends Component {
                     this.setState({ fetchingContents: false });
                   }
                 }
-                this.getMeshData();
               } else {
                 this.setState({ fetchingContents: false });
               }
@@ -349,28 +366,7 @@ export default class Customform extends Component {
       });
   }
 
-  getMeshData = (e) => {
-    const x = new XMLHttpRequest();
-    x.open('POST', 'https://meshb.nlm.nih.gov/api/MOD');
-    x.setRequestHeader('Content-Type', 'application/json;charset=UTF-8');
-    x.responseType = 'json';
-    x.onload = (e) => {
-      e.preventDefault();
-      const doc = x.response;
-      if (doc.body) {
-        try {
-          this.setState({ autoClassificationData: { meshData: JSON.parse(doc.body) } });
-          this.setState({ meshData: JSON.parse(doc.body) });
-          this.setState({ showAutoClassificationTab: true });
-        } catch (error) { }
-      }
-    };
-    x.onerror = (e) => {
-      throw e;
-    };
-    const text = striptags(this.state.domContents, [], '\n');
-    x.send(JSON.stringify({ input: text }));
-  }
+
   handleChange(event) {
     this.setState({ title: event.target.value });
   }
@@ -675,24 +671,33 @@ export default class Customform extends Component {
     });
   }
   uploadOgData(id) {
-    let postMetaData = [{
+    const postMetaData = [{
       name: 'openGraphMetaData',
       content: this.state.ogData
     },
     {
       name: 'twitterMetaData',
-      content: this.state.twitterTag
+      content: this.state.twitterTag ? this.state.twitterTag : []
     }, {
       name: 'htmlMetaData',
       content: this.state.metaData
     }, {
+      name: 'rssFeedData',
+      content: this.state.rssFeed
+    }, {
+      name: 'extractedKeywords',
+      content: this.state.extractedKeyWords
+    }, {
       name: 'pubMedMedlinesSimilarArticles',
       content: this.state.meshData
     }];
-    let uploadFileName = 'Lectio_Extension_Curation.json';
+    const uploadFileName = 'Lectio_Extension_Curation.json';
     if (this.state.isPdf) {
-      uploadFileName = 'Curated PDF Meta Data.json';
-      postMetaData = this.state.pdfMetaData ? this.state.pdfMetaData : [];
+      const tempObject = {
+        name: 'pdfMetaData',
+        content: this.state.pdfMetaData ? this.state.pdfMetaData : []
+      };
+      postMetaData.push(tempObject);
     }
     const metaData = new Blob([JSON.stringify(postMetaData)], { type: 'application/json' });
     const fr = new FileReader();
@@ -768,6 +773,13 @@ export default class Customform extends Component {
   }
   contentChange = (changeData) => {
     this.setState({ domContents: changeData });
+  }
+  shareDataChange= (changeData) => {
+    if (changeData.key === 'mesh') {
+      this.setState({ meshData: changeData.data });
+    } else if (changeData.key === 'keyWords') {
+      this.setState({ extractedKeyWords: changeData.data });
+    }
   }
   activateTabs(event) {
     event.preventDefault();
@@ -1005,34 +1017,10 @@ export default class Customform extends Component {
                   </div>
                   : null}
                 {this.state.showJsonTree ? <div id="panel-meta">
-                  <ExtractedContent jsonData={this.state.metaDataJSON} articleTitle={this.state.readabilityTitle} articleExcerpt={this.state.readabilityExcerpt} articleByline={this.state.readabilityByline} articleData={this.state.domContents} onContentChange={this.contentChange} />
+                  <ExtractedContent jsonData={this.state.metaDataJSON} rssFeed={this.state.rssFeed} articleTitle={this.state.readabilityTitle} articleExcerpt={this.state.readabilityExcerpt} articleByline={this.state.readabilityByline} articleData={this.state.domContents} onContentChange={this.contentChange} />
                 </div> : null}
                 {this.state.showShare ? <div id="panel-share">
-                  <div className="usa-accordion site-accordion-code">
-                    <h4 className="usa-accordion__heading site-accordion-code">
-                      <button
-                        className="usa-accordion__button"
-                        aria-expanded="true"
-                        aria-controls="metaDataContent"
-                      >
-                          Auto Classification
-                      </button>
-                    </h4>
-                    {this.state.showAutoClassificationTab ?
-                      <div id="metaDataContent" className="usa-accordion__content usa-prose">
-                        <div className="ds-u-margin-left--1 preview__label ds-u-font-style--normal" style={{ height: '500px' }}>
-                          <h4>NIH Medical Subjects Heading (MeSH)</h4>
-                          {this.state.autoClassificationData.meshData.MoD_Raw.Term_List.map(type => <div><label><input type="checkbox" value={type.term} /><span className="ds-u-padding-left--1" >{type.Term}</span>
-                          </label></div>)
-                          }
-                        </div>
-                      </div>
-                      :
-                      <button className="ds-u-margin--1 ds-c-button ds-c-button--primary">
-                        <span className="ds-c-spinner ds-c-spinner--small ds-c-spinner--inverse" aria-valuetext="Fetching classifications from NIH Medical Subject Headings (MeSH)" role="progressbar" /> Fetching classifications from NIH Medical Subject Headings (MeSH)
-                      </button>
-                    }
-                  </div>
+                  <ShareContent domContents={this.state.domContents} metaData={this.state.metaData} onContentChange={this.shareDataChange} />
                 </div> : null}
                 {this.state.showAttachmentTab ? <div id="panel-attachment"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
                 {this.state.showImgTab ? <div id="panel-img"><Popup
