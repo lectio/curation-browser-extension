@@ -90,7 +90,7 @@ export default class ExtractedContent extends React.Component {
             className="usa-accordion__button"
             aria-expanded="false"
             aria-controls="rssFeedContent"
-          >Rss Feed
+          >RSS Feeds
           </button>
         </h4>
         <div id="rssFeedContent" className="usa-accordion__content usa-prose" hidden>

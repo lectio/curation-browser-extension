@@ -74,6 +74,9 @@ export default class Customform extends Component {
       extractedKeyWords: [],
       rssFeed: []
     };
+    this.manifestData = chrome.runtime.getManifest();
+    // this.ConfigLoader = new ConfigLoaderClass();
+    // this.loadConfig = this.loadConfig.bind(this);
     this.handleChange = this.handleChange.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
     this.handleSummary = this.handleSummary.bind(this);
@@ -365,8 +368,6 @@ export default class Customform extends Component {
         }
       });
   }
-
-
   handleChange(event) {
     this.setState({ title: event.target.value });
   }
@@ -682,7 +683,7 @@ export default class Customform extends Component {
       name: 'htmlMetaData',
       content: this.state.metaData
     }, {
-      name: 'rssFeedData',
+      name: 'rssFeedsData',
       content: this.state.rssFeed
     }, {
       name: 'extractedKeywords',
@@ -774,7 +775,7 @@ export default class Customform extends Component {
   contentChange = (changeData) => {
     this.setState({ domContents: changeData });
   }
-  shareDataChange= (changeData) => {
+  shareDataChange = (changeData) => {
     if (changeData.key === 'mesh') {
       this.setState({ meshData: changeData.data });
     } else if (changeData.key === 'keyWords') {
@@ -1034,7 +1035,18 @@ export default class Customform extends Component {
                 {this.state.showMsgTab ? <div id="panel-msg"><Feedback siteUrl={this.state.url} cleanUrl={this.state.cleanUrl} /></div> : null}
                 {this.state.showNotificationTab ? <div id="panel-notification"><p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p></div> : null}
                 {this.state.showSettings ? <div id="panel-notification">
-                  <p className="ds-u-text-align--center ds-u-font-size--h3">Coming Soon !!</p>
+                  <section className="ds-u-margin--1 ds-u-border--2 preview__label ds-u-font-style--normal ds-l-container ds-u-font-size--base">
+                    <div className="ds-l-row ds-u-padding-top--1">
+                      <div className="ds-l-col">
+                        Name : Lectio
+                      </div>
+                    </div>
+                    <div className="ds-l-row ds-u-padding-top--1 ds-u-padding-bottom--1">
+                      <div className="ds-l-col">
+                        Version : {this.manifestData.version}
+                      </div>
+                    </div>
+                  </section>
                 </div> : null}
               </div>}
 

@@ -53,7 +53,7 @@ export default class ShareContent extends React.Component {
       x.send(JSON.stringify({ input: text }));
     }
     getExtractedContent() {
-      const extractedData = [];
+      let extractedData = [];
       this.state.metaData.map((meta, i) => {
         const fetcKeyWords = ['lytics:topics', 'keywords', 'news_keywords', 'elq-tags'];
         const key = meta.name;
@@ -69,6 +69,7 @@ export default class ShareContent extends React.Component {
           }
         }
       });
+      extractedData = extractedData.sort((a,b) => (a.content > b.content) ? 1 : ((b.content > a.content) ? -1 : 0));
       const tempObject = {
         key: 'keyWords',
         data: extractedData
