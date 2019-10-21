@@ -1,83 +1,28 @@
 {
-    "op.infra.lectio.cc" : {
-        "natureOfInstance": "Instance",
-        "extensionUI" : {
-            "displayName": "Netspective Lectio"            
-        },
-        "api" : {
-            "baseURL": "https://op.infra.lectio.cc/api/v3"
-        },
-        "projects" : {
-            "include" : [
-                { "name": ".*" }
-            ],
-            "exclude" : [],
-            "default" : "",
-            "dynamicConfig" : {
-                "projectWikiPageContent": "Netspective Lectio Browser Extension Project Configuration",
-                "extnLocalConfig":  "netspective_lectio.json"
-            }
-        }
-    },
     "openproject-devl.netspective.com" : {
+        "instanceUniqName": "openprojectdevlnetspectivecom",
+        "natureOfInstance": "Instance",
+        "extensionUI" : {
+            "displayName": "Development Server"            
+        },
+        "domain" :"https://openproject-devl.netspective.com",
+        "api" : {
+            "baseURL": "https://openproject-devl.netspective.com/api/v3",
+            "apiURL": "https://openproject-devl.netspective.com/api/v3"
+        },
+        "instanceConfigProject":{}
+    },
+    "op.infra.lectio.cc" : {
+        "instanceUniqName": "opinfralectiocc",
         "natureOfInstance": "Instance",
         "extensionUI" : {
             "displayName": "Netspective Lectio"            
         },
+        "domain" :"https://op.infra.lectio.cc",
         "api" : {
-            "baseURL": "https://openproject-devl.netspective.com/api/v3"
+            "baseURL": "https://op.infra.lectio.cc/",
+            "apiURL": "https://op.infra.lectio.cc/api/v3"
         },
-        "projects" : {
-            "include" : [
-                { "name": "lectio","id": 3 }
-            ],
-            "exclude" : [],
-            "default" : "",
-            "dynamicConfig" : {
-                "projectWikiPageContent": "Netspective Lectio Browser Extension Project Configuration",
-                "extnLocalConfig":  "openproject_devl.json"
-            }
-        }
-    },
-    
-    "plan.netspective.com" : {
-        "natureOfInstance": "Instance", 
-        "extensionUI" : {
-            "displayName": "Netspective Projects"            
-        },
-        "api" : {
-            "baseURL": "https://openproject.netspective.com/api/v3"
-        },
-        "projects" : {
-            "include" : [
-                { "name": ".*" }
-            ],
-            "exclude" : [],
-            "default" : "",
-            "commonConfig" : {
-                "extensionUI" : {
-                    "displayName" : "${context.projectName}"
-                },
-                "campaigns": [
-                    {
-                        "instanceName" : "${context.instanceName}",
-                        "projectName" : "${context.projectName}",
-                        "workPackages" : {
-                            "hierarchy": ["Objective", "Key Result", "Epic", "..."]
-                        },
-                        "include" : [
-                            { "name": ".*" }
-                        ],
-                        "exclude" : [],
-                        "default" : "",
-                        "contentStore" : {
-                            "instanceName" : "${context.instanceName}",
-                            "projectName" : "${context.projectName}",
-                            "workPackage" : "Knowledge"
-                        }
-                    }
-                ]
-            }            
-        }
+        "instanceConfigProject":{}
     }
 }

@@ -472,3 +472,6 @@
   text-shadow: 1px 1px #222;
   transform: translate(-50%, -50%);
 }
+.InstanceOptGroup {
+  color: #0a96f9;
+}

@@ -11,6 +11,9 @@ export default class Popup extends React.Component {
     this.state = {
       src: this.props.images[Number(selectedIndex)],
       selected: this.props.selectedImage,
+      configData: this.props.configdata,
+      apiUrl: this.props.apiUrl,
+      baseUrl:this.props.baseUrl,
       probs: this.props,
       articleTab: true,
       customTab: false,
@@ -50,14 +53,14 @@ export default class Popup extends React.Component {
     document.removeEventListener('click', this.openTab);
   }
   getTemplateImages() {
-    fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/work_packages/${APIDATA.TEMPLATE_ASSET_ID}`).then(response => response.json()).then((responsoData) => {
+    fetch(`${this.state.apiUrl}/work_packages/${this.state.configData.Asset.templateAssetId}`).then(response => response.json()).then((responsoData) => {
       const responseObject = responsoData._embedded.attachments;
       if (Number(responseObject.total) > 0) {
         const attachments = responseObject._embedded.elements;
         const images = [];
         attachments.map((attachment, i) => {
           const temp = {
-            path: APIDATA.BASE_URL + attachment._links.downloadLocation.href,
+            path: this.state.baseUrl + attachment._links.downloadLocation.href,
             name: attachment._links.self.title
           };
           images.push(temp);

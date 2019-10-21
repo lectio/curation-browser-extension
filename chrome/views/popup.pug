@@ -12,8 +12,6 @@ html
     meta(http-equiv="Content-Security-Policy" content="connect-src 'self' * 'unsafe-inline' https://* http://* data:; default-src 'self' * 'unsafe-inline';  style-src 'self' * 'unsafe-inline'; script-src 'self' * 'unsafe-inline' 'unsafe-eval';img-src 'self' * data: https: http: blob:;font-src 'self' * data:;")
     body
     #root
-    if env !== 'prod'
-      script(src='chrome-extension://lmhkpmbekcpmknklioeibfkpmmfibljd/js/redux-devtools-extension.js')
     script(src=env == 'prod' ? '/js/todoapp.bundle.js' : 'http://localhost:3000/js/todoapp.bundle.js')
     script(src="uswds-2.1.0/js/uswds.min.js")
     script(src="Readability.js")

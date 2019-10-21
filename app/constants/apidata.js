@@ -1,22 +1,31 @@
-export const SITE_URL = '/projects/lectio/work_packages/';
-export const BASE_URL = 'https://op.infra.lectio.cc'
-export const API_URL = '/api/v3';
-export const PROJECT_ID = '3';
-export const DOMAIN_NAME = 'op.infra.lectio.cc';
-export const cleanUrlField = 'customField2';
-export const sourceUrlField = 'customField1';
-export const FEEDBACK_PROJECT_ID = '4';
-export const FEEDBACK_TYPE = '19';
-export const TEMPLATE_ASSET_ID = '294';
 
-// export const SITE_URL = '/projects/lectio/work_packages/';
-// export const BASE_URL = 'https://openproject-devl.netspective.com';
-// export const API_URL = '/api/v3';
-// export const PROJECT_ID = '3';
-// export const DOMAIN_NAME = 'openproject-devl.netspective.com';
-// export const cleanUrlField = 'customField8';
-// export const sourceUrlField = 'customField2';
-// export const FEEDBACK_PROJECT_ID = '6';
-// export const FEEDBACK_TYPE = '12';
-// export const TEMPLATE_ASSET_ID = '401';
+const productionData = {
+  InstanceConfigProject: 'Lectio Instance Configuration',
 
+  SITE_URL: '/projects/lectio/work_packages/',
+  BASE_URL: 'https://op.infra.lectio.cc',
+  API_URL: '/api/v3',
+  PROJECT_ID: '3',
+  CONFIGURATION_TYPE_NAME: 'Configuration',
+  DOMAIN_NAME: 'op.infra.lectio.cc',
+  cleanUrlField: 'customField2',
+  sourceUrlField: 'customField1',
+  FEEDBACK_PROJECT_ID: '4',
+  FEEDBACK_TYPE: '19',
+};
+const developmentData = {
+  InstanceConfigProject: 'Lectio Instance Configuration',
+
+  SITE_URL: '/projects/lectio/work_packages/',
+  BASE_URL: 'https://openproject-devl.netspective.com',
+  API_URL: '/api/v3',
+  PROJECT_ID: '3',
+  CONFIGURATION_TYPE_NAME: 'Configuration',
+  DOMAIN_NAME: 'openproject-devl.netspective.com',
+  cleanUrlField: 'customField8',
+  sourceUrlField: 'customField2',
+  FEEDBACK_PROJECT_ID: '6',
+  FEEDBACK_TYPE: '12',
+};
+
+export default developmentData;

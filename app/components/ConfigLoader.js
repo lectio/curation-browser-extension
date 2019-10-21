@@ -25,21 +25,21 @@ export default class ConfigLoader extends React.Component {
 
 
   // eslint-disable-next-line react/sort-comp
-  loadConfig = () => new Promise((resolve) =>  {
+  loadConfig = () => new Promise((resolve) => {
     this.checkLogedInstance().then(async (isLogedIn) => {
       this.log('isLogedIn', isLogedIn);
       if (isLogedIn === true) {
         this.log('isLogedIn Inside', isLogedIn);
-        this.log('instanct'  );
         await this.getInstances();
         const newInstance = await this.getInstanceConfigData();
         const getProjects = await this.getProjectsWithConfig(newInstance);
+        const getConfigInstanceDat = this.getConfigInstqanceConfig(getProjects);
         // await this.getInstanceConfig().then( (InstConfig) => {
         //   this.log('InstConfig var' , InstConfig);
-        this.log('InstConfig', getProjects);
+        this.log('InstConfig', getConfigInstanceDat);
         //   resolve(this.state.instanceConfigProject);
         // });
-        resolve(getProjects);
+        resolve(getConfigInstanceDat);
       } else {
         resolve(false);
       }
@@ -48,8 +48,9 @@ export default class ConfigLoader extends React.Component {
     // const ConfigWorkPackages = await this.getConfigWorkPackageType();
   });
 
-  log = (text,data) => new Promise((resolve) => {
-    
+  log = (text, data) => new Promise(() => {
+    // console.log('===========================================================================================================');
+    // console.log(text, JSON.stringify(data));
   });
   getCookies(domain, name, callback) {
     chrome.cookies.get({ url: domain, name }, (cookie) => {
@@ -190,6 +191,40 @@ export default class ConfigLoader extends React.Component {
     });
   });
 
+  getConfigInstqanceConfig = instanceData => new Promise((resolve) => {
+    const instanceProjects = [];
+    let processCount = 1;
+    instanceData.forEach(async (instance) => {
+      const configData = await this.getInstaceConfigData(instance.instanceKey.api.apiURL, instance.configProject, instance.configPackageId.id);
+      instanceProjects.push({
+        instanceUniqName: instance.instanceUniqName,
+        instanceKey: instance.instanceKey,
+        configProject: { configProject: instance.configProject, configData },
+        OtherProjects: instance.OtherProjects,
+        configPackageId: instance.configPackageId,
+        activeProjects: instance.activeProjects
+      });
+      this.log('processCount',processCount);
+      if (processCount === this.state.instanceConfigProject.length) {
+        this.log('instanceProjects',instanceProjects);
+        resolve(instanceProjects);
+      }
+      processCount += 1;
+    });
+  });
+
+  getInstaceConfigData = (baseURL,project,typeId) => new Promise(async (resolve) =>{
+    const res = await fetch(`${baseURL}/projects/${project.id}/work_packages?filters=${encodeURIComponent(`[{"type":{"operator":"=","values":["${typeId}"]}}]`)}`, this.state.authdataGet)
+      .then((response) => {
+        return (response.json())})
+      .then(async (response) => {
+        if (response.total > 0) {
+          const content = await this.getContentType(response);
+          resolve(content);
+        }
+      });
+  });
+
   // https://op.infra.lectio.cc/api/v3/projects/3/work_packages?filters=[{%22type%22:{%22operator%22:%22=%22,%22values%22:[%2218%22]}}]&sortBy=[[%22id%22,%22asc%22]]
   getWorkPackages = (baseURL,projects,typeId) => new Promise((resolve) =>{
     let processCount = 1;
@@ -199,6 +234,7 @@ export default class ConfigLoader extends React.Component {
       .then((response) => {
         return (response.json())})
         .then(async (response) => {
+        // console.log('response',response);
         if (response.total > 0) {
           const contentType = await this.getContentType(response);
           activeProject.push({response, project, contentType});

@@ -10,7 +10,8 @@ export default class ShareContent extends React.Component {
       meshData: [],
       domContents: this.props.domContents,
       metaData: this.props.metaData,
-      extractedContent: []
+      extractedContent: [],
+      configData: this.props.configdata,
     };
   }
   componentDidMount() {
@@ -55,7 +56,7 @@ export default class ShareContent extends React.Component {
     getExtractedContent() {
       let extractedData = [];
       this.state.metaData.map((meta, i) => {
-        const fetcKeyWords = ['lytics:topics', 'keywords', 'news_keywords', 'elq-tags'];
+        const fetcKeyWords = this.state.configData.metaTags.extractKeyWords;
         const key = meta.name;
         if (fetcKeyWords.includes(key)) {
           const metaContent = meta.content;

@@ -16,7 +16,9 @@ export default class Feedback extends React.Component {
       osName: '',
       browser: '',
       browserVersion: '',
-      ipAddress: ''
+      ipAddress: '',
+      configData: this.props.configdata,
+      apiUrl: this.props.apiUrl
     };
     this.handleType = this.handleType.bind(this);
     this.handleSubject = this.handleSubject.bind(this);
@@ -53,8 +55,8 @@ export default class Feedback extends React.Component {
     }
     const manifestData = chrome.runtime.getManifest();
     let descriptionData = `<p></p><p></p><a href=${this.props.cleanUrl}>Clean URL</a>`;
-    descriptionData = descriptionData+" | "+"<a href="+this.props.siteUrl+">Source URL</a>";
-    descriptionData = descriptionData + " | Version "+manifestData.version + " on "+ os +","+browserName +" "+version;
+    descriptionData = `${descriptionData} | ` + `<a href=${this.props.siteUrl}>Source URL</a>`;
+    descriptionData = `${descriptionData} | Version ${manifestData.version} on ${os},${browserName} ${version}`;
     this.setState({
       description: descriptionData,
       osName: os,
@@ -82,6 +84,8 @@ export default class Feedback extends React.Component {
   handleSubmit(event) {
     event.preventDefault();
     this.setState({ loading: true });
+    const feedBackType = this.state.configData.Feedback.packageType.id;
+    const feedBackProjectId = this.state.configData.Feedback.projectId;
     const params = JSON.stringify({
       subject: this.state.subject,
       description: {
@@ -91,7 +95,7 @@ export default class Feedback extends React.Component {
       },
       _links: {
         type: {
-          href: `${APIDATA.API_URL}/types/${APIDATA.FEEDBACK_TYPE}`,
+          href: `${this.state.apiUrl}/types/${feedBackType}`,
           title: 'Feedback'
         },
       }
@@ -106,7 +110,7 @@ export default class Feedback extends React.Component {
         'Content-Type': 'application/json;charset=UTF-8',
       }
     };
-    fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/projects/${APIDATA.FEEDBACK_PROJECT_ID}/work_packages/`, data)
+    fetch(`${this.state.apiUrl}/projects/${feedBackProjectId}/work_packages/`, data)
       .then((response) => {
         if (response.status === 201) {
           // this.setState({ message: 'Saved Successfully.' });
@@ -138,7 +142,7 @@ export default class Feedback extends React.Component {
             'X-Requested-With': 'XMLHttpRequest'
           }
         };
-        fetch(`${APIDATA.BASE_URL + APIDATA.API_URL}/work_packages/${webPackageId}/attachments`, authdata);
+        fetch(`${this.state.apiUrl}/work_packages/${webPackageId}/attachments`, authdata);
         this.setState({ feedbackId: webPackageId });
         this.setState({ webUrl: APIDATA.SITE_URL });
         this.setState({ message: 'Feedback Submited ' });
