@@ -12,6 +12,7 @@ import pdfImage from '../../chrome/assets/img/edit-pdf.png';
 import * as Insatance from '../constants/config.json';
 import * as pdf from 'pdfjs-dist';
 import ConfigLoaderClass from './ConfigLoader';
+import APIDATA from '../constants/apidata';
 
 const urlExists = require('url-exists');
 
@@ -59,7 +60,7 @@ export default class Customform extends Component {
       parentId: null,
       favIcon: null,
       extConfig: [],
-      contentType: [],
+      contentTypes: [],
       contentTypeSelected: '',
       doc: '',
       domInitial: '',
@@ -77,13 +78,15 @@ export default class Customform extends Component {
       rssFeed: [],
       instanceData: [],
       SelectedInstanceId: '',
+      SelectedProjectIndex: '',
       SelectedProject: '',
       apiUrl: '',
       baseURL: '',
       domain: '',
-      projecIdentifier: '',
+      projectIdentifier: '',
       configdata: [],
-      allDomains: []
+      allDomains: [],
+      projectSelected: ''
     };
     this.manifestData = chrome.runtime.getManifest();
     this.ConfigLoader = new ConfigLoaderClass();
@@ -107,6 +110,8 @@ export default class Customform extends Component {
     this.clearImage = this.clearImage.bind(this);
     this.clearContent = this.clearContent.bind(this);
     this.appendReadableContent = this.appendReadableContent.bind(this);
+    this.handleProjectChange = this.handleProjectChange.bind(this);
+    this.needToLogin = [];
   }
   async componentDidMount() {
     this.getAlldomains();
@@ -327,7 +332,10 @@ export default class Customform extends Component {
   setAllImages(images) {
     const srcList = [];
     if (this.state.image) {
-      srcList.push(this.state.image);
+      const validUrl = this.checkURL(this.state.image);
+      if (validUrl) {
+        srcList.push(this.state.image);
+      }
     }
     for (let i = 0; i < images.length; i++) {
       const img = images[i].src;
@@ -410,27 +418,46 @@ export default class Customform extends Component {
   }
 
   async handleTypeChange(event) {
-    const selected = event.target.value.split('--');
-    await this.setState({ SelectedInstance: event.target.value });
-    await this.setState({ SelectedInstanceId: selected[0] });
-    await this.setState({ SelectedProject: selected[1] });
-    await this.setState({ contentTypeSelected: selected[2] });
-    await this.setState({ apiUrl: this.state.instanceData[selected[0]].instanceKey.api.apiURL });
-    await this.setState({ baseURL: this.state.instanceData[selected[0]].instanceKey.api.baseURL });
-    await this.setState({ configdata: this.state.instanceData[selected[0]].configProject.configData });
-    await this.setState({ domain: this.state.instanceData[selected[0]].instanceKey.domain });
-    await this.setState({ projecIdentifier: selected[3] });
-    this.log('event', event.target);
-    this.setState({ loaderLoading: false });
-    this.setState({ message: '' });
-    this.setState({ cleanUrl: this.generateCleanURL(this.state.url) });
-    await this.findDuplicate();
+    const selected = event.target.value;
+    this.log('event', selected);
+    await this.setState({ contentTypeSelected: selected });
+    await this.setState({ SelectedInstance: selected });
   }
   handleSummary(event) {
     this.setState({ summary: event.target.value });
   }
-  handleContentType(event) {
-    this.setState({ contentTypeSelected: event.target.value });
+  async handleProjectChange(event) {
+    const selected = event.target.value.split('--'); 
+    // this.log('selected',this.state.instanceData);
+    this.setState({ projectSelected: event.target.value });
+    await this.setState({ SelectedInstance: '' });
+    await this.setState({ SelectedInstanceId: selected[0] });
+    await this.setState({ contentTypeSelected: '' });
+    await this.setState({ SelectedProject: selected[1] });
+    await this.setState({ apiUrl: this.state.instanceData[selected[0]].instanceKey.api.apiURL });
+    await this.setState({ baseURL: this.state.instanceData[selected[0]].instanceKey.api.baseURL });
+    await this.setState({ configdata: this.state.instanceData[selected[0]].configProject.configData });
+    await this.setState({ domain: this.state.instanceData[selected[0]].instanceKey.domain });
+    await this.setState({ projectIdentifier: selected[2] });
+    this.setState({ loaderLoading: false });
+    this.setState({ message: '' });
+    this.setState({contentTypes:[]});
+    let flagHasType = false;
+   
+    this.state.instanceData[selected[0]].activeProjects.forEach( async (project) => {
+      this.log('project',project);
+      if(project.project.id == selected[1]){
+        flagHasType = true;
+        this.setState({contentTypes: project.contentType.contentType});
+      }
+    });
+    
+    if(!flagHasType){
+    this.log('configdata',this.state.configdata);
+      this.setState({contentTypes: this.state.configdata.projectDefaults.contentType});
+    }
+    this.setState({ cleanUrl: this.generateCleanURL(this.state.url) });
+    await this.findDuplicate();
   }
   togglePopup() {
     this.setState({
@@ -853,6 +880,7 @@ export default class Customform extends Component {
     } else {
       this.setState({ authenticate: true });
     }
+    this.needToLogin = await this.ConfigLoader.needToLogin();
     return resp;
     // expected output: 'resolved'
   }
@@ -954,21 +982,46 @@ export default class Customform extends Component {
       });
     }
   }
-  renderContentType() {
-    const ar = [];
-    this.state.instanceData.forEach((instance, index) => {
-      ar.push(<optgroup className={style.InstanceOptGroup} label={instance.instanceKey.extensionUI.displayName} />);
-      {
-        instance.activeProjects.map((project) => {
-          ar.push(<optgroup label={project.project.name} />);
 
-          {
-            project.contentType.contentType.map(type => (
-              ar.push(<option key={`${index}--${project.project.id}--${type.id}--${project.project.identifier}`} value={`${index}--${project.project.id}--${type.id}--${project.project.identifier}`}>{type.name}</option>)
-            ));
-          }
-        });
+  async recurProj(InstanceIndex,projects,level = 1,ar = []) {
+    // this.log('project',projects);
+    projects.forEach(async (data) => {
+      let spac = '';
+      for(let i=0; i<= level; i += 1){
+        spac += '\u00A0\u00A0';
       }
+      if(data.type === 'parent'){
+        ar.push(<optgroup className={style.InstanceOptGroup} label={spac + data.name} />)
+      }else{
+        await ar.push(<option key={`${InstanceIndex}--${data.id}--${data.identifier}`} value={`${InstanceIndex}--${data.id}--${data.identifier}`}>{spac + data.name}</option>);
+      }
+      // this.log('name',data.name);
+      // this.log('level',level);
+      if (typeof data.child !== 'undefined') {
+        return this.recurProj(InstanceIndex,data.child,level + 1,ar);
+      }
+      return ar;
+    });
+    
+  }
+
+  renderProjectList() {
+    let ar = [];
+    // this.log('instanceData',this.state.instanceData);
+    this.state.instanceData.forEach(async (instance, InstanceIndex) => {
+      ar.push(<optgroup className={style.InstanceOptGroup} label={instance.instanceKey.extensionUI.displayName} />);
+      // {
+      //   instance.activeProjects.map((project, ProjectIindex) => {
+      //   ar.push(<option key={`${InstanceIndex}--${ProjectIindex}--${project.project.id}--${project.project.identifier}`} value={`${InstanceIndex}--${ProjectIindex}--${project.project.id}--${project.project.identifier}`}>&nbsp;{project.project.name}</option>);
+      //   });
+      // }
+      if (typeof instance.configProject.configData.projects !== 'undefined') {
+        // this.log('call project', instance.instanceKey.extensionUI.displayName);
+      ar = await this.recurProj(InstanceIndex,instance.configProject.configData.projects,1,ar);
+      }
+    });
+    this.needToLogin.forEach((instance, InstanceIndex) => {
+      ar.push(<optgroup className={style.InstanceOptGroup} label={instance.extensionUI.displayName + ' (Need to Login)'} />);
     });
     return ar;
   }
@@ -1021,7 +1074,7 @@ export default class Customform extends Component {
                           </div>
                           <div className="ds-l-col--4">
                             {this.state.image.length > 0 ?
-                              <img id="imgTab" onClick={this.activateTabs} src={this.state.image} className={style.ogImages} alt="" />
+                              <img id="imgTab" onClick={this.activateTabs} src={this.state.image} className={style.ogImage} alt="" />
                               : null}
                             {this.state.isPdf ?
                               <img src={pdfImage} alt="pdf" height="42" width="42" /> : null}
@@ -1033,12 +1086,21 @@ export default class Customform extends Component {
                           <div className={[style.cleanUrl, 'ds-l-col--10 ds-u-padding-x--0'].join(' ')}><input type="text" className={this.state.parentId ? [style.textareaLink, 'preview__label ds-u-font-style--normal ds-u-color--white on ds-u-fill--secondary-dark ds-u-padding-x--1'].join(' ') : [style.textareaLink, 'preview__label ds-u-font-style--normal'].join(' ')} value={this.state.cleanUrl} onChange={this.handleUrl} style={this.state.parentId ? { height: '20px' } : { height: '18px' }} /></div>
                         </div>
                         <hr className="on ds-u-fill--gray-lightest ds-u-margin-bottom--0" />
-                        <div className="ds-l-row"><div className="ds-l-col--12">
-                          <select className={this.state.contentTypeSelected ? 'ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1 ds-u-margin-bottom--0 ds-u-padding-left--2' : [style.titleError, 'ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-margin-bottom--0 ds-u-padding-left--2'].join(' ')} value={this.state.SelectedInstance} onChange={this.handleTypeChange}>
-                            <option value="">Select</option>
+                        <div className="ds-l-row">
+                          <div className="ds-l-col--6">
+                          <select className={this.state.projectSelected ? 'ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1 ds-u-margin-bottom--0 ds-u-padding-left--2' : [style.titleError, 'ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-margin-bottom--0 ds-u-padding-left--2'].join(' ')} value={this.state.projectSelected} onChange={this.handleProjectChange} style={{minWidth:'237px'}}>
+                            <option value="">In</option>
                             {/* {this.state.contentType.map(type => <option key={type.id} value={type.id}>{type.name}</option>)} */}
-                            {this.renderContentType()}
-                          </select></div></div>
+                            {this.renderProjectList()}
+                          </select>
+                          </div>
+                          <div className="ds-l-col--6">
+                          <select className={this.state.contentTypeSelected ? 'ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1 ds-u-margin-bottom--0 ds-u-padding-left--2' : [style.titleError, 'ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-margin-bottom--0 ds-u-padding-left--2'].join(' ')} value={this.state.SelectedInstance} onChange={this.handleTypeChange}>
+                            <option value="">As</option>
+                           {this.state.contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}                            
+                          </select>
+                          </div>
+                        </div>
 
                         <hr className="on ds-u-fill--gray-lightest ds-u-margin-bottom--0" />
                         <div className={style.sucessBlock}>
@@ -1053,12 +1115,12 @@ export default class Customform extends Component {
                               <div className="ds-l-col--auto">
                                 <input disabled={!this.state.title || !this.state.contentTypeSelected} type="submit" value="Post to Lectio" className="ds-u-margin-left--1 ds-u-margin-top--1 ds-c-button ds-c-button--primary" /></div>
                               <div className="ds-l-col--auto">
-                                {this.state.parentId ? <a className="ds-u-margin-top--1 preview__label ds-u-font-size--base ds-u-font-style--normal" target="_blank" href={`${this.state.domain}/projects/${this.state.projecIdentifier}/work_packages/${this.state.parentId}/activity`}>{this.state.duplicateMessage}</a> : null}</div>
+                                {this.state.parentId ? <a className="ds-u-margin-top--1 preview__label ds-u-font-size--base ds-u-font-style--normal" target="_blank" href={`${this.state.domain}/projects/${this.state.projectIdentifier}/work_packages/${this.state.parentId}/activity`}>{this.state.duplicateMessage}</a> : null}</div>
                             </div> : null}
                           {this.state.message !== '' ?
                             <div className="ds-c-alert ds-c-alert--success">
                               <div className="ds-c-alert__body">
-                                <p className="ds-c-alert__text">{this.state.message} <a target="_blank" href={`${this.state.domain}/projects/${this.state.projecIdentifier}/work_packages/${this.state.taskId}`} rel="noopener noreferrer">{this.state.taskId ? `#${this.state.taskId}` : null}</a></p>
+                                <p className="ds-c-alert__text">{this.state.message} <a target="_blank" href={`${this.state.domain}/projects/${this.state.projectIdentifier}/work_packages/${this.state.taskId}`} rel="noopener noreferrer">{this.state.taskId ? `#${this.state.taskId}` : null}</a></p>
                               </div>
                             </div> : null}
                         </div>
@@ -1096,6 +1158,12 @@ export default class Customform extends Component {
                         <div className="ds-l-col">
                           Version : {this.manifestData.version}
                         </div>
+                      </div>
+                    </section>
+                    <section className="ds-u-margin--1 preview__label ds-u-font-style--normal ds-l-container ds-u-font-size--base">
+                      <div className="ds-u-text-align--center ds-u-margin-top--4">
+                        {this.needToLogin.map((value, index) => <div claasName="ds-l-row"><div className="ds-l-col ds-u-margin-bottom--1">
+                          <a className="ds-c-button ds-c-button--small ds-c-button--primary" href="#" onClick={e => this.signinTab(e, value.domain)} style={{minWidth:'300px'}} >Sign in to {value.extensionUI.displayName}</a></div></div>)}
                       </div>
                     </section>
                   </div> : null}
@@ -1139,11 +1207,12 @@ export default class Customform extends Component {
                 <img id="logoIcon" className={style.logoSmall} src={logo} alt="Lectio" />
               </div>
               <div className="ds-u-font-size--h3 ds-u-text-align--center ds-u-margin-bottom--3">
-                You are not authenticated yet, <br />please log in to continue.
+                You are not authenticated yet, <br />please log into a Lectio instance.
             </div>
               <hr className="on ds-u-fill--gray-lightest" />
               <div className="ds-u-text-align--center ds-u-margin-top--4">
-                {this.state.allDomains.map((value, index) => <div claasName="ds-u-margin-top--4"><a className="ds-u-font-size--h4" href="#" onClick={e => this.signinTab(e, value.domain)}>Sign in to {value.domainName}</a></div>)}
+                {this.state.allDomains.map((value, index) => <div claasName="ds-l-row"><div className="ds-l-col ds-u-margin-bottom--1">
+                  <a className="ds-c-button ds-c-button--small ds-c-button--primary" href="#" onClick={e => this.signinTab(e, value.domain)} style={{ width: '65%' }}>Sign in to {value.domainName}</a></div></div>)}
                 <div className="ds-u-font-style--italic ds-u-margin-top--4 ds-u-margin-bottom--2">
                   After you’ve signed in, <br />please click the extension button again.
               </div>

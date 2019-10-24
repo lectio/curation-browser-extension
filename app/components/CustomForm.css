@@ -64,6 +64,17 @@
   object-fit: contain;
   max-height: 100px;
   min-height: 80px;
+  max-width: 180px;
+}
+.ogImage{
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  cursor: pointer;
+  object-fit: contain;
+  max-height: 100px;
+  min-height: 80px;
+  max-width: 122px;
 }
 .ogCreateImage{
   display: block;

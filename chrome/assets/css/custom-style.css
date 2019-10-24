@@ -8,8 +8,8 @@
     padding-bottom: 20px !important;
 }
 #feedbackForm .ck-editor__editable_inline {
-    min-height: 430px !important;
-    max-height: 430px !important;
+    min-height: 300px !important;
+    max-height: 300px !important;
 }
 #homePageForm .ck.ck-editor__main>.ck-editor__editable:not(.ck-focused){
     border-left:0px !important;

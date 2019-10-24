@@ -150,48 +150,74 @@ export default class Feedback extends React.Component {
   }
   render() {
     return (
-      <section className="ds-l-container">
-        <form onSubmit={this.handleSubmit} id="feedbackForm">
-          <div className="ds-l-row ds-u-margin-top--2">
-            <div className="ds-l-col">
-              <input type="text" className="ds-c-field preview__label ds-u-font-size--small ds-u-font-style--normal ds-u-border--1" name="Subject" placeholder="Subject" value={this.state.subject} onChange={this.handleSubject} required />
-            </div>
-          </div>
-          <div className="ds-l-row  ds-u-margin-top--0">
-            <div className="ds-l-col preview__label ds-u-font-size--small ds-u-font-style--normal">
-              <CKEditor
-                editor={ClassicEditor}
-                config={{
-                  toolbar: ['heading', 'bold', 'italic', 'link', 'undo', 'redo', 'bulletedList', 'numberedList', 'blockQuote']
-                }}
-                data={this.state.description}
-                onInit={(editor) => {
-                  editor.setData(this.state.description);
-                }}
-                onChange={(event, editor) => {
-                  const data = editor.getData();
-                  this.setState({ description: data });
-                }}
-              />
-              {/* <textarea className="ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1" name="Description" rows="25" value={this.state.description} onChange={this.handleDescription} /> */}
-            </div>
-          </div>
-          <hr className="on ds-u-fill--gray-lightest" />
-          <div className="ds-l-row  ds-u-margin-top--0">
-            <div className="ds-l-col--auto">
-              <input type="submit" value="Submit" className="ds-c-button ds-c-button--primary" />
-            </div>
-            {this.state.message !== '' ?
-              <div className="ds-l-col">
-                <div className="ds-c-alert ds-c-alert--success">
-                  <div className="ds-c-alert__body">
-                    <p className="ds-c-alert__text">{this.state.message} <a target="_blank" href={APIDATA.BASE_URL + APIDATA.SITE_URL + this.state.feedbackId} rel="noopener noreferrer">{this.state.feedbackId ? `#${this.state.feedbackId}` : null}</a></p>
-                  </div>
+      <div className="usa-accordion site-accordion-code">
+        <h4 className="usa-accordion__heading site-accordion-code">
+          <button
+            className="usa-accordion__button"
+            aria-expanded="true"
+            aria-controls="feedBackContent"
+          >Feedback</button>
+        </h4>
+        <div id="feedBackContent" className="usa-accordion__content usa-prose ds-u-padding-left--1 ds-u-padding-top--0">
+          <section className="ds-l-container ds-u-overflow--hidden">
+            <form onSubmit={this.handleSubmit} id="feedbackForm">
+              <div className="ds-l-row ds-u-margin-top--2">
+                <div className="ds-l-col">
+                  <input type="text" className="ds-c-field preview__label ds-u-font-size--small ds-u-font-style--normal ds-u-border--1" name="Subject" placeholder="Subject" value={this.state.subject} onChange={this.handleSubject} required />
                 </div>
-              </div> : null}
-          </div>
-        </form>
-      </section>
+              </div>
+              <div className="ds-l-row  ds-u-margin-top--0">
+                <div className="ds-l-col preview__label ds-u-font-size--small ds-u-font-style--normal">
+                  <CKEditor
+                    editor={ClassicEditor}
+                    config={{
+                      toolbar: ['heading', 'bold', 'italic', 'link', 'undo', 'redo', 'bulletedList', 'numberedList', 'blockQuote']
+                    }}
+                    data={this.state.description}
+                    onInit={(editor) => {
+                      editor.setData(this.state.description);
+                    }}
+                    onChange={(event, editor) => {
+                      const data = editor.getData();
+                      this.setState({ description: data });
+                    }}
+                  />
+                  {/* <textarea className="ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1" name="Description" rows="25" value={this.state.description} onChange={this.handleDescription} /> */}
+                </div>
+              </div>
+              {/* <hr className="on ds-u-fill--gray-lightest" /> */}
+              <div className="ds-l-row  ds-u-margin-top--0">
+                <div className="ds-l-col--auto">
+                  <input type="submit" value="Submit" className="ds-c-button ds-c-button--primary" />
+                </div>
+                {this.state.message !== '' ?
+                  <div className="ds-l-col">
+                    <div className="ds-c-alert ds-c-alert--success">
+                      <div className="ds-c-alert__body">
+                        <p className="ds-c-alert__text">{this.state.message} <a target="_blank" href={APIDATA.BASE_URL + APIDATA.SITE_URL + this.state.feedbackId} rel="noopener noreferrer">{this.state.feedbackId ? `#${this.state.feedbackId}` : null}</a></p>
+                      </div>
+                    </div>
+                  </div> : null}
+              </div>
+            </form>
+          </section>
+        </div>
+        <h4 className="usa-accordion__heading site-accordion-code">
+          <button
+            className="usa-accordion__button"
+            aria-expanded="false"
+            aria-controls="whatsNewContent"
+          >What's New</button>
+        </h4>
+        <div id="whatsNewContent" className="usa-accordion__content usa-prose ds-u-padding-left--1 ds-u-padding-top--0">
+          <ul className="ds-c-list preview__label ds-u-font-size--base ds-u-font-style--normal">
+            <li>Implemented What's New in Feedback tab.</li>
+            <li>​​​​​Added all projects under Netspective projects.</li>
+            <li>Created sign in option in the settings tab.</li>
+            <li>Bug fixes.</li>
+          </ul>
+        </div>
+      </div>
     );
   }
 }

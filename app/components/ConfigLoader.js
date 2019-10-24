@@ -1,3 +1,4 @@
+/* eslint-disable no-underscore-dangle */
 import React from 'react';
 import INSTANCE from '../constants/config.json';
 import APIDATA from '../constants/apidata';
@@ -13,6 +14,7 @@ export default class ConfigLoader extends React.Component {
       loading: false,
       configData: [],
       instanceData: [],
+      needToLogin : [],
       instanceConfigProject: [],
       configProject:[],
       OtherProjects:[],
@@ -33,13 +35,13 @@ export default class ConfigLoader extends React.Component {
         await this.getInstances();
         const newInstance = await this.getInstanceConfigData();
         const getProjects = await this.getProjectsWithConfig(newInstance);
-        const getConfigInstanceDat = this.getConfigInstqanceConfig(getProjects);
+        // const getConfigInstanceDat = await this.getConfigInstanceConfig(getProjects);
         // await this.getInstanceConfig().then( (InstConfig) => {
         //   this.log('InstConfig var' , InstConfig);
-        this.log('InstConfig', getConfigInstanceDat);
+        this.log('InstConfig', getProjects);
         //   resolve(this.state.instanceConfigProject);
         // });
-        resolve(getConfigInstanceDat);
+        resolve(getProjects);
       } else {
         resolve(false);
       }
@@ -80,6 +82,8 @@ export default class ConfigLoader extends React.Component {
           // console.log('response',responseJson);
           if (typeof responseJson._links !== 'undefined') {
             this.setState({ configData: this.state.configData.push(INSTANCE[key]) });
+          } else {
+            this.setState({ needToLogin: this.state.needToLogin.push(INSTANCE[key]) });
           }
           // console.log('instLoopCountEnd:',i);
           // console.log('configData',this.state.configData);
@@ -92,6 +96,9 @@ export default class ConfigLoader extends React.Component {
           }
         });
     });
+  });
+  needToLogin = () => new Promise((resolve) => {
+    resolve(this.state.needToLogin);
   });
   getInstanceConfigData = () => new Promise((resolve) => {
     let configPackageId = 0;
@@ -114,7 +121,6 @@ export default class ConfigLoader extends React.Component {
       // this.setState(instanceProjects => ({ instanceConfigProject: instanceProjects }));
       this.log('instanceProjects', instanceProjects);
       // this.setState({ newinstanceConfigProject: 'Static value' });
-      this.log('instanceProjects', instanceProjects);
 
       if (processCount === this.state.instanceConfigProject.length) {
         this.log('instanceConfigProject DATA', this.state.instanceProjects);
@@ -171,6 +177,47 @@ export default class ConfigLoader extends React.Component {
       });
   });
   getProjectsWithConfig = instanceData => new Promise((resolve) => {
+    
+    const instanceProjects = [];
+    let processCount = 0;
+    instanceData.forEach(async (instance) => {
+      let activeProjects = [];
+      let configData = [];
+      const project = await fetch(`${instance.instanceKey.api.apiURL}/queries/default?filters=${encodeURIComponent(`[{"type":{"operator":"=","values":["${instance.configPackageId.id}"]}}]`)}`, this.state.authdataGet)
+        .then((response) => {
+          return (response.json()); 
+        })
+        .then(async (response) => {
+          this.log('response NEw', response._embedded.results._embedded.elements);
+          instance.OtherProjects.forEach(async (project) => {
+            response._embedded.results._embedded.elements.forEach(async (respPackage) => {
+              if (respPackage._links.project.href === project._links.self.href) {
+                const contentType = await this.getContentType(respPackage.description.raw);
+                activeProjects.push({ respPackage, project, contentType });
+              }
+
+              if(respPackage._links.project.href == instance.configProject._links.self.href) {
+                configData = await this.getContentType(respPackage.description.raw);
+              }
+            });
+          });
+          processCount += 1;
+        });
+      instanceProjects.push({
+        instanceUniqName: instance.instanceUniqName,
+        instanceKey: instance.instanceKey,
+        configProject: { configProject: instance.configProject, configData },
+        OtherProjects: instance.OtherProjects,
+        configPackageId: instance.configPackageId,
+        activeProjects
+      });
+      this.log('203 processCount', [processCount, instanceData.length ]);
+      if (processCount >= instanceData.length) {
+        resolve(instanceProjects);
+      }
+    });
+  });
+  getProjectsWithConfigOld = instanceData => new Promise((resolve) => {
     const instanceProjects = [];
     let processCount = 1;
     instanceData.forEach(async (instance) => {
@@ -191,11 +238,13 @@ export default class ConfigLoader extends React.Component {
     });
   });
 
-  getConfigInstqanceConfig = instanceData => new Promise((resolve) => {
+  getConfigInstanceConfig = instanceData => new Promise((resolve) => {
     const instanceProjects = [];
     let processCount = 1;
     instanceData.forEach(async (instance) => {
+      this.log('234 processCount',[ processCount, instanceData.length ]);
       const configData = await this.getInstaceConfigData(instance.instanceKey.api.apiURL, instance.configProject, instance.configPackageId.id);
+      this.log('236 processCount',[ processCount, instanceData.length ]);
       instanceProjects.push({
         instanceUniqName: instance.instanceUniqName,
         instanceKey: instance.instanceKey,
@@ -204,29 +253,29 @@ export default class ConfigLoader extends React.Component {
         configPackageId: instance.configPackageId,
         activeProjects: instance.activeProjects
       });
-      this.log('processCount',processCount);
-      if (processCount === this.state.instanceConfigProject.length) {
-        this.log('instanceProjects',instanceProjects);
+      this.log('243 processCount', [ processCount, instanceData.length ]);
+      if (processCount >= this.state.instanceConfigProject.length) {
+        this.log('instanceProjects instance',  instanceProjects);
         resolve(instanceProjects);
       }
       processCount += 1;
+      this.log('251 processCount', [ processCount, instanceData.length ]);
     });
   });
 
-  getInstaceConfigData = (baseURL,project,typeId) => new Promise(async (resolve) =>{
+  getInstaceConfigData = (baseURL, project, typeId) => new Promise(async (resolve) =>{
     const res = await fetch(`${baseURL}/projects/${project.id}/work_packages?filters=${encodeURIComponent(`[{"type":{"operator":"=","values":["${typeId}"]}}]`)}`, this.state.authdataGet)
       .then((response) => {
         return (response.json())})
       .then(async (response) => {
         if (response.total > 0) {
-          const content = await this.getContentType(response);
+          const content = await this.getContentType(response._embedded.elements[0].description.raw);
           resolve(content);
         }
       });
   });
 
-  // https://op.infra.lectio.cc/api/v3/projects/3/work_packages?filters=[{%22type%22:{%22operator%22:%22=%22,%22values%22:[%2218%22]}}]&sortBy=[[%22id%22,%22asc%22]]
-  getWorkPackages = (baseURL,projects,typeId) => new Promise((resolve) =>{
+  getWorkPackages = (baseURL, projects, typeId) => new Promise((resolve) =>{
     let processCount = 1;
     let activeProject = [];
     projects.forEach(async (project) => {
@@ -236,7 +285,7 @@ export default class ConfigLoader extends React.Component {
         .then(async (response) => {
         // console.log('response',response);
         if (response.total > 0) {
-          const contentType = await this.getContentType(response);
+          const contentType = await this.getContentType(response._embedded.elements[0].description.raw);
           activeProject.push({response, project, contentType});
         }
         this.log('proicessCount work packaes',[processCount ,projects.length]);
@@ -286,10 +335,8 @@ export default class ConfigLoader extends React.Component {
   //   resolve(inst);
   // });
 
-  getContentType = response => new Promise((resolve) => {
-    const rawData = response._embedded.elements[0].description.raw;
-    
-    this.log(rawData);
+  getContentType = rawData => new Promise((resolve) => {
+    this.log('raqData',rawData);
     this.log(rawData.substr(11,rawData.length - 14));
     yaml.safeLoadAll(decodeURIComponent(rawData.substr(11,rawData.length - 14)), (doc) => {
       resolve(doc);

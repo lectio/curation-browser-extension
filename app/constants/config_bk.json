@@ -1,4 +1,5 @@
 {
+    
     "op.infra.lectio.cc" : {
         "instanceUniqName": "opinfralectiocc",
         "natureOfInstance": "Instance",
@@ -22,6 +23,19 @@
         "api" : {
             "baseURL": "https://openproject.netspective.com/",
             "apiURL": "https://openproject.netspective.com/api/v3"
+        },
+        "instanceConfigProject":{}
+    },
+    "openproject-devl.netspective.com" : {
+        "instanceUniqName": "openproject-devl",
+        "natureOfInstance": "Instance",
+        "extensionUI" : {
+            "displayName": "openproject-devl"            
+        },
+        "domain" :"https://openproject-devl.netspective.com",
+        "api" : {
+            "baseURL": "https://openproject-devl.netspective.com/",
+            "apiURL": "https://openproject-devl.netspective.com/api/v3"
         },
         "instanceConfigProject":{}
     }

@@ -2,7 +2,6 @@ import React from 'react';
 import htmlToImage from 'html-to-image';
 import { Tabs, TabPanel } from '@cmsgov/design-system-core';
 import style from './CustomForm.css';
-import * as APIDATA from '../constants/apidata';
 
 export default class Popup extends React.Component {
   constructor(props) {
@@ -13,7 +12,7 @@ export default class Popup extends React.Component {
       selected: this.props.selectedImage,
       configData: this.props.configdata,
       apiUrl: this.props.apiUrl,
-      baseUrl:this.props.baseUrl,
+      baseUrl: this.props.baseUrl,
       probs: this.props,
       articleTab: true,
       customTab: false,
@@ -46,8 +45,8 @@ export default class Popup extends React.Component {
         });
       };
       this.setState({ src: theImage.src });
-      document.addEventListener('click', this.openTab);
     }
+    document.addEventListener('click', this.openTab);
   }
   componentWillUnmount() {
     document.removeEventListener('click', this.openTab);
@@ -97,17 +96,19 @@ export default class Popup extends React.Component {
     }));
   }
   templateSelected = (event) => {
-    const param = event.target.dataset;
-    this.setState({ src: '' });
-    const self = this;
-    const htmlToPng = this.convertHtmlToPng(param.param);
-    htmlToPng.then((response) => {
-      const tempObject = {
-        src: response,
-        index: null
-      };
-      self.state.probs.onChangeValue(tempObject);
-    });
+    if (!event.detail || event.detail == 1) {
+      const param = event.target.dataset;
+      this.setState({ src: '' });
+      const self = this;
+      const htmlToPng = this.convertHtmlToPng(param.param);
+      htmlToPng.then((response) => {
+        const tempObject = {
+          src: response,
+          index: null
+        };
+        self.state.probs.onChangeValue(tempObject);
+      });
+    }
   }
   fileChangedHandler = (event) => {
     this.setState({ src: URL.createObjectURL(event.target.files[0]) });
