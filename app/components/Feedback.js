@@ -1,5 +1,4 @@
 import React from 'react';
-import * as APIDATA from '../constants/apidata';
 import CKEditor from '@ckeditor/ckeditor5-react';
 import ClassicEditor from '@ckeditor/ckeditor5-build-classic';
 
@@ -18,7 +17,8 @@ export default class Feedback extends React.Component {
       browserVersion: '',
       ipAddress: '',
       configData: this.props.configdata,
-      apiUrl: this.props.apiUrl
+      apiUrl: this.props.apiUrl,
+      siteUrl: this.props.siteUrl,
     };
     this.handleType = this.handleType.bind(this);
     this.handleSubject = this.handleSubject.bind(this);
@@ -98,6 +98,10 @@ export default class Feedback extends React.Component {
           href: `${this.state.apiUrl}/types/${feedBackType}`,
           title: 'Feedback'
         },
+        assignee: {
+          "href": `${this.state.apiUrl}/users/${ this.state.configData.Feedback.assigneeId}`,
+          title: 'Assignee'
+      }
       }
     });
     const data = {
@@ -144,7 +148,7 @@ export default class Feedback extends React.Component {
         };
         fetch(`${this.state.apiUrl}/work_packages/${webPackageId}/attachments`, authdata);
         this.setState({ feedbackId: webPackageId });
-        this.setState({ webUrl: APIDATA.SITE_URL });
+        this.setState({ webUrl: this.state.siteUrl });
         this.setState({ message: 'Feedback Submited ' });
       });
   }
@@ -194,7 +198,7 @@ export default class Feedback extends React.Component {
                   <div className="ds-l-col">
                     <div className="ds-c-alert ds-c-alert--success">
                       <div className="ds-c-alert__body">
-                        <p className="ds-c-alert__text">{this.state.message} <a target="_blank" href={APIDATA.BASE_URL + APIDATA.SITE_URL + this.state.feedbackId} rel="noopener noreferrer">{this.state.feedbackId ? `#${this.state.feedbackId}` : null}</a></p>
+                        <p className="ds-c-alert__text">{this.state.message} <a target="_blank" href={this.state.siteUrl + '/work_packages/' + this.state.feedbackId} rel="noopener noreferrer">{this.state.feedbackId ? `#${this.state.feedbackId}` : null}</a></p>
                       </div>
                     </div>
                   </div> : null}
@@ -211,10 +215,17 @@ export default class Feedback extends React.Component {
         </h4>
         <div id="whatsNewContent" className="usa-accordion__content usa-prose ds-u-padding-left--1 ds-u-padding-top--0">
           <ul className="ds-c-list preview__label ds-u-font-size--base ds-u-font-style--normal">
-            <li>Implemented What's New in Feedback tab.</li>
-            <li>​​​​​Added all projects under Netspective projects.</li>
-            <li>Created sign in option in the settings tab.</li>
-            <li>Bug fixes.</li>
+            <li>Release 3.4.1 October 28, 2019.</li>
+            <ul>
+              <li>​​​​​Imporved.</li>
+              <ul>
+                <li>Added assignee to feedback.</li>
+              </ul>
+              <li>Fixes</li>
+              <ul>
+                <li>Fixed the premission issue on Lectio Instance Feedback on Netspective Projets</li>
+              </ul>
+            </ul>
           </ul>
         </div>
       </div>

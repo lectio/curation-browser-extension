@@ -323,8 +323,8 @@ export default class Customform extends Component {
     });
   }
   log = (text, data) => new Promise((resolve) => {
-    // console.log('===========================================================================================================');
-    // console.log(text, JSON.stringify(data));
+    console.log('===========================================================================================================');
+    console.log(text, JSON.stringify(data));
   });
   checkURL(url) {
     return (url.match(/\.(jpeg|jpg|gif|png)$/) != null);
