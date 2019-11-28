@@ -16,6 +16,7 @@ import APIDATA from '../constants/apidata';
 
 const urlExists = require('url-exists');
 
+
 export default class Customform extends Component {
   constructor(props) {
     super(props);
@@ -86,7 +87,9 @@ export default class Customform extends Component {
       projectIdentifier: '',
       configdata: [],
       allDomains: [],
-      projectSelected: ''
+      projectSelected: '',
+      tabHead: '',
+      tabBody: ''
     };
     this.manifestData = chrome.runtime.getManifest();
     this.ConfigLoader = new ConfigLoaderClass();
@@ -114,9 +117,23 @@ export default class Customform extends Component {
     this.needToLogin = [];
   }
   async componentDidMount() {
+    
+    await chrome.runtime.getBackgroundPage(async eventPage => {
+      // Call the getPageInfo function in the event page, passing in 
+      // our onPageDetailsReceived function as the callback. This injects 
+      // content.js into the current tab's HTML
+      const details = await eventPage.getPageDetails(pageDetails => {
+        
+        this.setState({ tabHead: pageDetails.head, tabBody: pageDetails.body });
+        return pageDetails;
+      });
+    });
+
     this.getAlldomains();
     const response = await this.loadConfig();
-    await chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const eventPage = [];
+
+    await chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
       if (tabs) {
         const tabUrl = tabs[0].url;
         const pattern = /^((http|https|www):\/\/)/;
@@ -132,7 +149,7 @@ export default class Customform extends Component {
         }
         this.setState({ url: tabUrl, cleanUrl: this.generateCleanURL(tabUrl) });
         const isPDF = this.isPdfLink(tabUrl);
-        isPDF.then((pdfResponse) => {
+        isPDF.then(async (pdfResponse) => {
           if (pdfResponse === 'pdf') {
             if (tabUrl.indexOf('http://') === 0 || tabUrl.indexOf('https://') === 0) {
               // this.findDuplicate();
@@ -141,182 +158,178 @@ export default class Customform extends Component {
               this.setState({ fetchingContents: false });
             }
           } else {
-            const x = new XMLHttpRequest();
-            x.open('GET', tabUrl);
-            x.responseType = 'document';
-            x.onload = (e) => {
-              e.preventDefault();
-              const doc = x.response;
-              if (doc) {
-                const ogTitle = doc.querySelector('meta[property="og:title"]');
-                const ogDesc = doc.querySelector('meta[property="og:description"]');
-                const ogSiteName = doc.querySelector('meta[property="og:site_name"]');
-                const siteName = ogSiteName ? ogSiteName.getAttribute('content') : '';
-                let desc = '';
-                let title = '';
-                const image = doc.querySelector('meta[property="og:image"]');
-                const dcTitle = doc.querySelector('meta[name="DC.Title"]');
-                const metaDescription = doc.querySelector('meta[name="description"]');
-                const metaTitle = doc.querySelector('meta[name="title"]');
-                const titleTag = doc.querySelector('title').innerHTML;
-                const rssFeeds = doc.querySelectorAll('link[type="application/rss+xml"]');
-                const article = new Readability(doc).parse();
-                if (article) {
-                  this.setState({
-                    mozilaReadability: article,
-                    readabilityTitle: article.title,
-                    readabilityExcerpt: article.excerpt,
-                    readabilityByline: article.byline,
-                    readabilityContent: article.content,
-                    domContents: article.content,
-                    domInitial: article.content,
-                  });
-                }
-                if (ogTitle) {
-                  title = ogTitle.getAttribute('content');
-                } else if (dcTitle && title === '') {
-                  title = dcTitle.getAttribute('content');
-                } else if (metaTitle && title === '') {
-                  title = metaTitle.getAttribute('content');
-                } else if (titleTag && title === '') {
-                  title = titleTag;
-                }
-                title = title.trim();
-                if (!title) {
-                  title = article.title;
-                }
-                if (ogDesc) {
-                  desc = ogDesc.getAttribute('content');
-                } else if (metaDescription && desc === '') {
-                  desc = metaDescription.getAttribute('content');
-                }
-                if (!desc && article) {
-                  desc = article.content;
-                }
-                const ogData = [];
-                const og = doc.querySelectorAll("meta[property^='og']");
-                let favicon;
-                const nodeList = doc.querySelectorAll('link');
-                for (let i = 0; i < nodeList.length; i++) {
-                  if ((nodeList[i].getAttribute('rel') === 'icon') || (nodeList[i].getAttribute('rel') === 'shortcut icon')) {
-                    favicon = nodeList[i].getAttribute('href');
-                  }
-                }
-                let i = 0;
-                for (i = 0; i < og.length; i++) {
-                  ogData.push({ name: og[i].attributes.property.nodeValue, content: og[i].attributes.content.nodeValue });
-                }
-                this.setState({ ogData });
-                const metaDataOb = [];
-                const meta = doc.getElementsByTagName('meta');
-                let j = 0;
-                for (j = 0; j < meta.length; j++) {
-                  if (meta.item(j).name !== '') {
-                    metaDataOb.push({ name: meta.item(j).name, content: meta.item(j).content });
-                  }
-                }
-                this.setState({ metaData: metaDataOb });
-                if (rssFeeds.length > 0) {
-                  let n = 0;
-                  const rssFeedData = [];
-                  for (n = 0; n < rssFeeds.length; n++) {
-                    const rssUrl = rssFeeds[n].getAttribute('href');
-                    const rssTitle = rssFeeds[n].getAttribute('title');
-                    const tempObj = {
-                      url: rssUrl,
-                      title: rssTitle
-                    };
-                    rssFeedData.push(tempObj);
-                  }
-                  this.setState({ rssFeed: rssFeedData });
-                }
-                this.generateJSON(doc);
-                if (x.readyState === 4) {
-                  if (x.status === 200) {
-                    this.setState({ fetchingContents: false });
-                    // this.findDuplicate();
-                    const self = this;
-                    let baseUrl = this.state.url.split('/');
-                    let readMoreurl = `${baseUrl[2]}`;
-                    readMoreurl = readMoreurl.replace('www.', '');
-                    const readMore = `<br><a target="_blank" href=${this.state.cleanUrl}>Read on ${readMoreurl}</a>`;
-                    // const readMore = `<br>[Read on ${readMoreurl}](${this.state.cleanUrl})`;
-                    if (desc && selectedContent === '') {
-                      desc += '<br>';
-                      desc += readMore;
-                      this.setState({
-                        summary: desc
-                      });
-                    } else {
-                      if (selectedContent !== '') {
-                        selectedContent += '<br>';
-                        selectedContent += readMore;
-                      }
-                      this.setState({ summary: selectedContent });
-                    }
-                    if (title) {
-                      let titleValue = title.split('--');
-                      titleValue = titleValue[0].split(/[»|]/);
-                      titleValue = titleValue[0];
-                      const restTitle = titleValue.substring(0, titleValue.lastIndexOf('-') + 1);
-                      const lastTitle = titleValue.substring(titleValue.lastIndexOf('-') + 1, titleValue.length);
-                      if (siteName) {
-                        if ((lastTitle.toLowerCase()).trim() === (siteName.toLowerCase()).trim()) {
-                          titleValue = restTitle.replace('-', '');
-                          titleValue = titleValue.trim();
-                        }
-                      }
-                      this.setState({ title: titleValue });
-                    }
-                    const allImages = doc.getElementsByTagName('img');
-                    if (image) {
-                      let ogImage = image.getAttribute('content');
-                      if (!pattern.test(ogImage)) {
-                        baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
-                        ogImage = baseUrl + ogImage;
-                      }
-                      urlExists(ogImage, (err, exists) => {
-                        if (exists) {
-                          this.setState({ image: ogImage });
-                        }
-                        this.setAllImages(allImages);
-                      });
-                    } else {
-                      this.setAllImages(allImages);
-                    }
-                    if (favicon) {
-                      if (favicon.startsWith('//')) {
-                        favicon = baseUrl[0] + favicon;
-                      } else if (!pattern.test(favicon)) {
-                        baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
-                        favicon = baseUrl + favicon;
-                      }
-                      urlExists(favicon, (err, exists) => {
-                        if (exists) {
-                          self.setState({ favIcon: favicon });
-                        }
-                      });
-                    }
-                    this.setState({
-                      doc
-                    });
-                  } else {
-                    this.setState({ fetchingContents: false });
-                  }
-                }
-              } else {
-                this.setState({ fetchingContents: false });
+            await this.loadDoc().then(async  (doc) => {
+            
+            
+            if (doc) {
+              const ogTitle = doc.querySelector('meta[property="og:title"]');
+              this.log('ogTitle',ogTitle);
+              
+              const ogDesc = doc.querySelector('meta[property="og:description"]');
+              const ogSiteName = doc.querySelector('meta[property="og:site_name"]');
+              const siteName = ogSiteName ? ogSiteName.getAttribute('content') : '';
+              let desc = '';
+              let title = '';
+              
+              const image = doc.querySelector('meta[property="og:image"]');
+              const dcTitle = doc.querySelector('meta[name="DC.Title"]');
+              const metaDescription = doc.querySelector('meta[name="description"]');
+              const metaTitle = doc.querySelector('meta[name="title"]');
+              const titleTag = doc.querySelector('title').innerHTML;
+              const rssFeeds = doc.querySelectorAll('link[type="application/rss+xml"]');
+              const article = new Readability(doc).parse();
+              if (article) {
+                this.setState({
+                  mozilaReadability: article,
+                  readabilityTitle: article.title,
+                  readabilityExcerpt: article.excerpt,
+                  readabilityByline: article.byline,
+                  readabilityContent: article.content,
+                  domContents: article.content,
+                  domInitial: article.content,
+                });
               }
-            };
-            x.onerror = (e) => {
+              if (ogTitle) {
+                title = ogTitle.getAttribute('content');
+              } else if (dcTitle && title === '') {
+                title = dcTitle.getAttribute('content');
+              } else if (metaTitle && title === '') {
+                title = metaTitle.getAttribute('content');
+              } else if (titleTag && title === '') {
+                title = titleTag;
+              }
+              title = title.trim();
+              if (!title) {
+                title = article.title;
+              }
+              if (ogDesc) {
+                desc = ogDesc.getAttribute('content');
+              } else if (metaDescription && desc === '') {
+                desc = metaDescription.getAttribute('content');
+              }
+              if (!desc && article) {
+                desc = article.content;
+              }
+              const ogData = [];
+              const og = doc.querySelectorAll("meta[property^='og']");
+              let favicon;
+              const nodeList = doc.querySelectorAll('link');
+              for (let i = 0; i < nodeList.length; i++) {
+                if ((nodeList[i].getAttribute('rel') === 'icon') || (nodeList[i].getAttribute('rel') === 'shortcut icon')) {
+                  favicon = nodeList[i].getAttribute('href');
+                }
+              }
+              let i = 0;
+              for (i = 0; i < og.length; i++) {
+                ogData.push({ name: og[i].attributes.property.nodeValue, content: og[i].attributes.content.nodeValue });
+              }
+              this.setState({ ogData });
+              const metaDataOb = [];
+              const meta = doc.getElementsByTagName('meta');
+              let j = 0;
+              for (j = 0; j < meta.length; j++) {
+                if (meta.item(j).name !== '') {
+                  metaDataOb.push({ name: meta.item(j).name, content: meta.item(j).content });
+                }
+              }
+              this.setState({ metaData: metaDataOb });
+              if (rssFeeds.length > 0) {
+                let n = 0;
+                const rssFeedData = [];
+                for (n = 0; n < rssFeeds.length; n++) {
+                  const rssUrl = rssFeeds[n].getAttribute('href');
+                  const rssTitle = rssFeeds[n].getAttribute('title');
+                  const tempObj = {
+                    url: rssUrl,
+                    title: rssTitle
+                  };
+                  rssFeedData.push(tempObj);
+                }
+                this.setState({ rssFeed: rssFeedData });
+              }
+              this.generateJSON(doc);
               this.setState({ fetchingContents: false });
-              throw e;
-            };
-            if (pattern.test(tabUrl)) {
-              x.send(null);
+              const self = this;
+              let baseUrl = this.state.url.split('/');
+              let readMoreurl = `${baseUrl[2]}`;
+              readMoreurl = readMoreurl.replace('www.', '');
+              const readMore = `<br><a target="_blank" href=${this.state.cleanUrl}>Read on ${readMoreurl}</a>`;
+              if (desc && selectedContent === '') {
+                desc += '<br>';
+                desc += readMore;
+                this.setState({
+                  summary: desc
+                });
+              } else {
+                if (selectedContent !== '') {
+                  selectedContent += '<br>';
+                  selectedContent += readMore;
+                }
+                this.setState({ summary: selectedContent });
+              }
+              if (title) {
+                let titleValue = title.split('--');
+                titleValue = titleValue[0].split(/[»|]/);
+                titleValue = titleValue[0];
+                let restTitle = titleValue.substring(0, titleValue.lastIndexOf('-') + 1);
+                let lastTitle = titleValue.substring(titleValue.lastIndexOf('-') + 1, titleValue.length);
+                // To handle this special character,it's not a '-'
+                if (titleValue.includes('–')) {
+                  restTitle = titleValue.substring(0, titleValue.lastIndexOf('–') + 1);
+                  restTitle = restTitle.replace('–', '');
+                  lastTitle = titleValue.substring(titleValue.lastIndexOf('–') + 1, titleValue.length);
+                }
+                if (siteName) {
+                  if ((lastTitle.toLowerCase()).trim() === (siteName.toLowerCase()).trim()) {
+                    titleValue = restTitle.replace('-', '');
+                    titleValue = titleValue.trim();
+                  }
+                }
+                this.setState({ title: titleValue });
+              }
+              const allImages = doc.getElementsByTagName('img');
+              
+              if (image) {
+                let ogImage = image.getAttribute('content');
+                if (!pattern.test(ogImage)) {
+                  baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
+                  ogImage = baseUrl + ogImage;
+                }
+                urlExists(ogImage, (err, exists) => {
+                  if (exists) {
+                    this.setState({ image: ogImage });
+                  }
+                  this.setAllImages(allImages);
+                });
+              } else {
+                this.setAllImages(allImages);
+              }
+              if (favicon) {
+                if (favicon.startsWith('//')) {
+                  favicon = baseUrl[0] + favicon;
+                } else if (!pattern.test(favicon)) {
+                  baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
+                  favicon = baseUrl + favicon;
+                }
+                urlExists(favicon, (err, exists) => {
+                  if (exists) {
+                    self.setState({ favIcon: favicon });
+                  }
+                });
+              }
+              this.setState({
+                doc
+              });
             } else {
               this.setState({ fetchingContents: false });
             }
+            if (pattern.test(tabUrl)) {
+              // x.send(null);
+            } else {
+              this.setState({ fetchingContents: false });
+            }
+            
+          });
           }
         });
       }
@@ -349,6 +362,16 @@ export default class Customform extends Component {
     }
     this.setState({ allImages: srcList });
   }
+  loadDoc = () => new Promise( async (resolve) => {
+      var doc = document.implementation.createHTMLDocument("New Document");
+      doc.head.innerHTML = this.state.tabHead;
+      let bdy = this.state.tabBody;
+      var noScript = bdy.replace(/script/g, "THISISNOTASCRIPTREALLY");
+      doc.body.innerHTML = noScript;
+      if(this.state.tabBody && noScript){
+        resolve(doc);
+      }
+  });
   getAlldomains() {
     const instancesKeys = Object.keys(Insatance.default);
     const domainNames = [];
@@ -419,7 +442,6 @@ export default class Customform extends Component {
 
   async handleTypeChange(event) {
     const selected = event.target.value;
-    this.log('event', selected);
     await this.setState({ contentTypeSelected: selected });
     await this.setState({ SelectedInstance: selected });
   }
@@ -427,8 +449,7 @@ export default class Customform extends Component {
     this.setState({ summary: event.target.value });
   }
   async handleProjectChange(event) {
-    const selected = event.target.value.split('--'); 
-    // this.log('selected',this.state.instanceData);
+    const selected = event.target.value.split('--');
     this.setState({ projectSelected: event.target.value });
     await this.setState({ SelectedInstance: '' });
     await this.setState({ SelectedInstanceId: selected[0] });
@@ -441,20 +462,18 @@ export default class Customform extends Component {
     await this.setState({ projectIdentifier: selected[2] });
     this.setState({ loaderLoading: false });
     this.setState({ message: '' });
-    this.setState({contentTypes:[]});
+    this.setState({ contentTypes: [] });
     let flagHasType = false;
-   
-    this.state.instanceData[selected[0]].activeProjects.forEach( async (project) => {
-      this.log('project',project);
-      if(project.project.id == selected[1]){
+
+    this.state.instanceData[selected[0]].activeProjects.forEach(async (project) => {
+      if (project.project.id == selected[1]) {
         flagHasType = true;
-        this.setState({contentTypes: project.contentType.contentType});
+        this.setState({ contentTypes: project.contentType.contentType });
       }
     });
-    
-    if(!flagHasType){
-    this.log('configdata',this.state.configdata);
-      this.setState({contentTypes: this.state.configdata.projectDefaults.contentType});
+
+    if (!flagHasType) {
+      this.setState({ contentTypes: this.state.configdata.projectDefaults.contentType });
     }
     this.setState({ cleanUrl: this.generateCleanURL(this.state.url) });
     await this.findDuplicate();
@@ -657,6 +676,13 @@ export default class Customform extends Component {
         }
       });
     }
+    APIDATA.ignoreFrom.map((str) => {
+      if (urlTemp.indexOf(str) > -1) {
+        urlTemp = urlTemp.split(str);
+        urlTemp = urlTemp[0];
+      }
+    });
+
     this.cleanUrl = urlTemp.replace(/(\?)utm[^&]*(?:&utm[^&]*)*&(?=(?!utm[^\s&=]*=)[^\s&=]+=)|\?utm[^&]*(?:&utm[^&]*)*$|&utm[^&]*/gi, '');
     return this.cleanUrl;
   }
@@ -873,7 +899,6 @@ export default class Customform extends Component {
   }
   async loadConfig() {
     const resp = await this.ConfigLoader.loadConfig();
-    this.log('responose lodaconfig', resp);
     this.setState({ instanceData: resp });
     if (resp === false) {
       this.setState({ isLogin: false });
@@ -983,26 +1008,26 @@ export default class Customform extends Component {
     }
   }
 
-  async recurProj(InstanceIndex,projects,level = 1,ar = []) {
+  async recurProj(InstanceIndex, projects, level = 1, ar = []) {
     // this.log('project',projects);
     projects.forEach(async (data) => {
       let spac = '';
-      for(let i=0; i<= level; i += 1){
+      for (let i = 0; i <= level; i += 1) {
         spac += '\u00A0\u00A0';
       }
-      if(data.type === 'parent'){
+      if (data.type === 'parent') {
         ar.push(<optgroup className={style.InstanceOptGroup} label={spac + data.name} />)
-      }else{
+      } else {
         await ar.push(<option key={`${InstanceIndex}--${data.id}--${data.identifier}`} value={`${InstanceIndex}--${data.id}--${data.identifier}`}>{spac + data.name}</option>);
       }
       // this.log('name',data.name);
       // this.log('level',level);
       if (typeof data.child !== 'undefined') {
-        return this.recurProj(InstanceIndex,data.child,level + 1,ar);
+        return this.recurProj(InstanceIndex, data.child, level + 1, ar);
       }
       return ar;
     });
-    
+
   }
 
   renderProjectList() {
@@ -1010,14 +1035,9 @@ export default class Customform extends Component {
     // this.log('instanceData',this.state.instanceData);
     this.state.instanceData.forEach(async (instance, InstanceIndex) => {
       ar.push(<optgroup className={style.InstanceOptGroup} label={instance.instanceKey.extensionUI.displayName} />);
-      // {
-      //   instance.activeProjects.map((project, ProjectIindex) => {
-      //   ar.push(<option key={`${InstanceIndex}--${ProjectIindex}--${project.project.id}--${project.project.identifier}`} value={`${InstanceIndex}--${ProjectIindex}--${project.project.id}--${project.project.identifier}`}>&nbsp;{project.project.name}</option>);
-      //   });
-      // }
       if (typeof instance.configProject.configData.projects !== 'undefined') {
         // this.log('call project', instance.instanceKey.extensionUI.displayName);
-      ar = await this.recurProj(InstanceIndex,instance.configProject.configData.projects,1,ar);
+        ar = await this.recurProj(InstanceIndex, instance.configProject.configData.projects, 1, ar);
       }
     });
     this.needToLogin.forEach((instance, InstanceIndex) => {
@@ -1085,20 +1105,37 @@ export default class Customform extends Component {
                           <div className={[style.favIcon, 'ds-l-col--auto'].join(' ')}>{this.state.favIcon ? <img src={this.state.favIcon} width="18px" height="18px" alt="favIcon" /> : null}</div>
                           <div className={[style.cleanUrl, 'ds-l-col--10 ds-u-padding-x--0'].join(' ')}><input type="text" className={this.state.parentId ? [style.textareaLink, 'preview__label ds-u-font-style--normal ds-u-color--white on ds-u-fill--secondary-dark ds-u-padding-x--1'].join(' ') : [style.textareaLink, 'preview__label ds-u-font-style--normal'].join(' ')} value={this.state.cleanUrl} onChange={this.handleUrl} style={this.state.parentId ? { height: '20px' } : { height: '18px' }} /></div>
                         </div>
+                        <hr className="on ds-u-fill--gray-lightest" />
+                        <div className="ds-l-row">
+                            <label class="usa-label">Start Date</label>
+                            <fieldset class="usa-fieldset">
+                              <div class="usa-memorable-date">
+                                <div class="usa-form-group usa-form-group--month">
+                                  <input class="usa-input usa-input--inline" placeholder="MM" aria-describedby="dobHint" id="date_of_birth_1" name="date_of_birth_1" type="number" min="1" max="12" value=""/>
+                                </div>
+                                <div class="usa-form-group usa-form-group--day">
+                                  <input class="usa-input usa-input--inline" placeholder="DD" aria-describedby="dobHint" id="date_of_birth_2" name="date_of_birth_2" type="number" min="1" max="31" value=""/>
+                                </div>
+                                <div class="usa-form-group usa-form-group--year">
+                                  <input class="usa-input usa-input--inline"placeholder="YYYY"  aria-describedby="dobHint" id="date_of_birth_3" name="date_of_birth_3" type="number" min="1900" max="2019" value=""/>
+                                </div>
+                              </div>
+                            </fieldset>
+                        </div>
                         <hr className="on ds-u-fill--gray-lightest ds-u-margin-bottom--0" />
                         <div className="ds-l-row">
                           <div className="ds-l-col--6">
-                          <select className={this.state.projectSelected ? 'ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1 ds-u-margin-bottom--0 ds-u-padding-left--2' : [style.titleError, 'ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-margin-bottom--0 ds-u-padding-left--2'].join(' ')} value={this.state.projectSelected} onChange={this.handleProjectChange} style={{minWidth:'237px'}}>
-                            <option value="">In</option>
-                            {/* {this.state.contentType.map(type => <option key={type.id} value={type.id}>{type.name}</option>)} */}
-                            {this.renderProjectList()}
-                          </select>
+                            <select className={this.state.projectSelected ? 'ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1 ds-u-margin-bottom--0 ds-u-padding-left--2' : [style.titleError, 'ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-margin-bottom--0 ds-u-padding-left--2'].join(' ')} value={this.state.projectSelected} onChange={this.handleProjectChange} style={{ minWidth: '237px' }}>
+                              <option value="">In</option>
+                              {/* {this.state.contentType.map(type => <option key={type.id} value={type.id}>{type.name}</option>)} */}
+                              {this.renderProjectList()}
+                            </select>
                           </div>
                           <div className="ds-l-col--6">
-                          <select className={this.state.contentTypeSelected ? 'ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1 ds-u-margin-bottom--0 ds-u-padding-left--2' : [style.titleError, 'ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-margin-bottom--0 ds-u-padding-left--2'].join(' ')} value={this.state.SelectedInstance} onChange={this.handleTypeChange}>
-                            <option value="">As</option>
-                           {this.state.contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}                            
-                          </select>
+                            <select className={this.state.contentTypeSelected ? 'ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1 ds-u-margin-bottom--0 ds-u-padding-left--2' : [style.titleError, 'ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-margin-bottom--0 ds-u-padding-left--2'].join(' ')} value={this.state.SelectedInstance} onChange={this.handleTypeChange}>
+                              <option value="">As</option>
+                              {this.state.contentTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
+                            </select>
                           </div>
                         </div>
 
@@ -1163,7 +1200,7 @@ export default class Customform extends Component {
                     <section className="ds-u-margin--1 preview__label ds-u-font-style--normal ds-l-container ds-u-font-size--base">
                       <div className="ds-u-text-align--center ds-u-margin-top--4">
                         {this.needToLogin.map((value, index) => <div claasName="ds-l-row"><div className="ds-l-col ds-u-margin-bottom--1">
-                          <a className="ds-c-button ds-c-button--small ds-c-button--primary" href="#" onClick={e => this.signinTab(e, value.domain)} style={{minWidth:'300px'}} >Sign in to {value.extensionUI.displayName}</a></div></div>)}
+                          <a className="ds-c-button ds-c-button--small ds-c-button--primary" href="#" onClick={e => this.signinTab(e, value.domain)} style={{ minWidth: '300px' }} >Sign in to {value.extensionUI.displayName}</a></div></div>)}
                       </div>
                     </section>
                   </div> : null}
