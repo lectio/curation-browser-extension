@@ -13,9 +13,8 @@ import * as Insatance from '../constants/config.json';
 import * as pdf from 'pdfjs-dist';
 import ConfigLoaderClass from './ConfigLoader';
 import APIDATA from '../constants/apidata';
-
+import DatePicker from "react-datepicker";
 const urlExists = require('url-exists');
-
 
 export default class Customform extends Component {
   constructor(props) {
@@ -32,6 +31,7 @@ export default class Customform extends Component {
       url: '',
       cleanUrl: '',
       allImages: [],
+      currentActiveTab:'showEdit',
       showPopup: false,
       selectedImage: 0,
       showEdit: true,
@@ -89,12 +89,27 @@ export default class Customform extends Component {
       allDomains: [],
       projectSelected: '',
       tabHead: '',
-      tabBody: ''
+      tabBody: '',
+      pattern: /^((http|https|www):\/\/)/,
+      EventStartMonth: '',
+      EventStartDay: '',
+      EventStartYear: '',
+      EventEndMonth: '',
+      EventEndDay: '',
+      EventEndYear: '',
+      EventLocation: '',
+      isEventType: false,
+      invalidEvent: false,
+      eventStartDate: new Date(),
+      eventEndDate: new Date(),
+      eventErrorMessage: ''
     };
     this.manifestData = chrome.runtime.getManifest();
     this.ConfigLoader = new ConfigLoaderClass();
     this.loadConfig = this.loadConfig.bind(this);
     this.handleChange = this.handleChange.bind(this);
+    this.handleEventStartDateChange = this.handleEventStartDateChange.bind(this);
+    this.handleEventEndDateChange = this.handleEventEndDateChange.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
     this.handleSummary = this.handleSummary.bind(this);
     this.handleUrl = this.handleUrl.bind(this);
@@ -114,31 +129,42 @@ export default class Customform extends Component {
     this.clearContent = this.clearContent.bind(this);
     this.appendReadableContent = this.appendReadableContent.bind(this);
     this.handleProjectChange = this.handleProjectChange.bind(this);
+    this.handleEventLocation = this.handleEventLocation.bind(this);
+    this.checkeventSchema = this.checkeventSchema.bind(this);
+
     this.needToLogin = [];
   }
   async componentDidMount() {
-    
-    await chrome.runtime.getBackgroundPage(async eventPage => {
+    const doc = await chrome.runtime.getBackgroundPage(eventPage => {
       // Call the getPageInfo function in the event page, passing in 
       // our onPageDetailsReceived function as the callback. This injects 
       // content.js into the current tab's HTML
-      const details = await eventPage.getPageDetails(pageDetails => {
-        
-        this.setState({ tabHead: pageDetails.head, tabBody: pageDetails.body });
-        return pageDetails;
+      return new Promise((resolve) => {
+        let doc = '';
+        doc = eventPage.getPageDetails(pageDetails => {
+          const str = '<html>' + pageDetails.head + pageDetails.body + '</html>';
+
+          this.setState({ tabHead: pageDetails.head, tabBody: pageDetails.body });
+
+          return new DOMParser().parseFromString(str, "text/html");
+        });
+
+        if (typeof (doc) === 'object') {
+          resolve(doc);
+        }
       });
     });
 
     this.getAlldomains();
     const response = await this.loadConfig();
     const eventPage = [];
-
+    const delay = ms => new Promise(res => setTimeout(res, ms));
     await chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
       if (tabs) {
         const tabUrl = tabs[0].url;
-        const pattern = /^((http|https|www):\/\/)/;
+
         let selectedContent = '';
-        if (pattern.test(tabUrl)) {
+        if (this.state.pattern.test(tabUrl)) {
           chrome.tabs.executeScript({
             code: 'window.getSelection().toString();'
           }, (selection) => {
@@ -148,8 +174,7 @@ export default class Customform extends Component {
           });
         }
         this.setState({ url: tabUrl, cleanUrl: this.generateCleanURL(tabUrl) });
-        const isPDF = this.isPdfLink(tabUrl);
-        isPDF.then(async (pdfResponse) => {
+        await this.isPdfLink(tabUrl).then(async (pdfResponse) => {
           if (pdfResponse === 'pdf') {
             if (tabUrl.indexOf('http://') === 0 || tabUrl.indexOf('https://') === 0) {
               // this.findDuplicate();
@@ -158,186 +183,182 @@ export default class Customform extends Component {
               this.setState({ fetchingContents: false });
             }
           } else {
-            await this.loadDoc().then(async  (doc) => {
-            
-            
-            if (doc) {
-              const ogTitle = doc.querySelector('meta[property="og:title"]');
-              this.log('ogTitle',ogTitle);
-              
-              const ogDesc = doc.querySelector('meta[property="og:description"]');
-              const ogSiteName = doc.querySelector('meta[property="og:site_name"]');
-              const siteName = ogSiteName ? ogSiteName.getAttribute('content') : '';
-              let desc = '';
-              let title = '';
-              
-              const image = doc.querySelector('meta[property="og:image"]');
-              const dcTitle = doc.querySelector('meta[name="DC.Title"]');
-              const metaDescription = doc.querySelector('meta[name="description"]');
-              const metaTitle = doc.querySelector('meta[name="title"]');
-              const titleTag = doc.querySelector('title').innerHTML;
-              const rssFeeds = doc.querySelectorAll('link[type="application/rss+xml"]');
-              const article = new Readability(doc).parse();
-              if (article) {
-                this.setState({
-                  mozilaReadability: article,
-                  readabilityTitle: article.title,
-                  readabilityExcerpt: article.excerpt,
-                  readabilityByline: article.byline,
-                  readabilityContent: article.content,
-                  domContents: article.content,
-                  domInitial: article.content,
-                });
-              }
-              if (ogTitle) {
-                title = ogTitle.getAttribute('content');
-              } else if (dcTitle && title === '') {
-                title = dcTitle.getAttribute('content');
-              } else if (metaTitle && title === '') {
-                title = metaTitle.getAttribute('content');
-              } else if (titleTag && title === '') {
-                title = titleTag;
-              }
-              title = title.trim();
-              if (!title) {
-                title = article.title;
-              }
-              if (ogDesc) {
-                desc = ogDesc.getAttribute('content');
-              } else if (metaDescription && desc === '') {
-                desc = metaDescription.getAttribute('content');
-              }
-              if (!desc && article) {
-                desc = article.content;
-              }
-              const ogData = [];
-              const og = doc.querySelectorAll("meta[property^='og']");
-              let favicon;
-              const nodeList = doc.querySelectorAll('link');
-              for (let i = 0; i < nodeList.length; i++) {
-                if ((nodeList[i].getAttribute('rel') === 'icon') || (nodeList[i].getAttribute('rel') === 'shortcut icon')) {
-                  favicon = nodeList[i].getAttribute('href');
-                }
-              }
-              let i = 0;
-              for (i = 0; i < og.length; i++) {
-                ogData.push({ name: og[i].attributes.property.nodeValue, content: og[i].attributes.content.nodeValue });
-              }
-              this.setState({ ogData });
-              const metaDataOb = [];
-              const meta = doc.getElementsByTagName('meta');
-              let j = 0;
-              for (j = 0; j < meta.length; j++) {
-                if (meta.item(j).name !== '') {
-                  metaDataOb.push({ name: meta.item(j).name, content: meta.item(j).content });
-                }
-              }
-              this.setState({ metaData: metaDataOb });
-              if (rssFeeds.length > 0) {
-                let n = 0;
-                const rssFeedData = [];
-                for (n = 0; n < rssFeeds.length; n++) {
-                  const rssUrl = rssFeeds[n].getAttribute('href');
-                  const rssTitle = rssFeeds[n].getAttribute('title');
-                  const tempObj = {
-                    url: rssUrl,
-                    title: rssTitle
-                  };
-                  rssFeedData.push(tempObj);
-                }
-                this.setState({ rssFeed: rssFeedData });
-              }
-              this.generateJSON(doc);
-              this.setState({ fetchingContents: false });
-              const self = this;
-              let baseUrl = this.state.url.split('/');
-              let readMoreurl = `${baseUrl[2]}`;
-              readMoreurl = readMoreurl.replace('www.', '');
-              const readMore = `<br><a target="_blank" href=${this.state.cleanUrl}>Read on ${readMoreurl}</a>`;
-              if (desc && selectedContent === '') {
-                desc += '<br>';
-                desc += readMore;
-                this.setState({
-                  summary: desc
-                });
-              } else {
-                if (selectedContent !== '') {
-                  selectedContent += '<br>';
-                  selectedContent += readMore;
-                }
-                this.setState({ summary: selectedContent });
-              }
-              if (title) {
-                let titleValue = title.split('--');
-                titleValue = titleValue[0].split(/[»|]/);
-                titleValue = titleValue[0];
-                let restTitle = titleValue.substring(0, titleValue.lastIndexOf('-') + 1);
-                let lastTitle = titleValue.substring(titleValue.lastIndexOf('-') + 1, titleValue.length);
-                // To handle this special character,it's not a '-'
-                if (titleValue.includes('–')) {
-                  restTitle = titleValue.substring(0, titleValue.lastIndexOf('–') + 1);
-                  restTitle = restTitle.replace('–', '');
-                  lastTitle = titleValue.substring(titleValue.lastIndexOf('–') + 1, titleValue.length);
-                }
-                if (siteName) {
-                  if ((lastTitle.toLowerCase()).trim() === (siteName.toLowerCase()).trim()) {
-                    titleValue = restTitle.replace('-', '');
-                    titleValue = titleValue.trim();
-                  }
-                }
-                this.setState({ title: titleValue });
-              }
-              const allImages = doc.getElementsByTagName('img');
-              
-              if (image) {
-                let ogImage = image.getAttribute('content');
-                if (!pattern.test(ogImage)) {
-                  baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
-                  ogImage = baseUrl + ogImage;
-                }
-                urlExists(ogImage, (err, exists) => {
-                  if (exists) {
-                    this.setState({ image: ogImage });
-                  }
-                  this.setAllImages(allImages);
-                });
-              } else {
-                this.setAllImages(allImages);
-              }
-              if (favicon) {
-                if (favicon.startsWith('//')) {
-                  favicon = baseUrl[0] + favicon;
-                } else if (!pattern.test(favicon)) {
-                  baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
-                  favicon = baseUrl + favicon;
-                }
-                urlExists(favicon, (err, exists) => {
-                  if (exists) {
-                    self.setState({ favIcon: favicon });
-                  }
-                });
-              }
-              this.setState({
-                doc
-              });
-            } else {
-              this.setState({ fetchingContents: false });
-            }
-            if (pattern.test(tabUrl)) {
-              // x.send(null);
-            } else {
-              this.setState({ fetchingContents: false });
-            }
-            
-          });
+            await delay(2000);
+            await this.loadDoc().then(async (doc) => {
+              this.processDoc(doc, selectedContent);
+            });
           }
         });
       }
     });
   }
+  processDoc = (doc, selectedContent) => new Promise((resolve) => {
+
+    if (doc) {
+      const ogTitle = doc.querySelector('meta[property="og:title"]');
+
+      const ogDesc = doc.querySelector('meta[property="og:description"]');
+      const ogSiteName = doc.querySelector('meta[property="og:site_name"]');
+      const siteName = ogSiteName ? ogSiteName.getAttribute('content') : '';
+      let desc = '';
+      let title = '';
+
+      const image = doc.querySelector('meta[property="og:image"]');
+      const dcTitle = doc.querySelector('meta[name="DC.Title"]');
+      const metaDescription = doc.querySelector('meta[name="description"]');
+      const metaTitle = doc.querySelector('meta[name="title"]');
+      const titleTag = doc.querySelector('title').innerHTML;
+      const rssFeeds = doc.querySelectorAll('link[type="application/rss+xml"]');
+      const article = new Readability(doc).parse();
+      if (article) {
+        this.setState({
+          mozilaReadability: article,
+          readabilityTitle: article.title,
+          readabilityExcerpt: article.excerpt,
+          readabilityByline: article.byline,
+          readabilityContent: article.content,
+          domContents: article.content,
+          domInitial: article.content,
+        });
+      }
+      if (ogTitle) {
+        title = ogTitle.getAttribute('content');
+      } else if (dcTitle && title === '') {
+        title = dcTitle.getAttribute('content');
+      } else if (metaTitle && title === '') {
+        title = metaTitle.getAttribute('content');
+      } else if (titleTag && title === '') {
+        title = titleTag;
+      }
+      title = title.trim();
+      if (!title) {
+        title = article.title;
+      }
+      if (ogDesc) {
+        desc = ogDesc.getAttribute('content');
+      } else if (metaDescription && desc === '') {
+        desc = metaDescription.getAttribute('content');
+      }
+      if (!desc && article) {
+        desc = article.content;
+      }
+      const ogData = [];
+      const og = doc.querySelectorAll("meta[property^='og']");
+      let favicon;
+      const nodeList = doc.querySelectorAll('link');
+      for (let i = 0; i < nodeList.length; i++) {
+        if ((nodeList[i].getAttribute('rel') === 'icon') || (nodeList[i].getAttribute('rel') === 'shortcut icon')) {
+          favicon = nodeList[i].getAttribute('href');
+        }
+      }
+      let i = 0;
+      for (i = 0; i < og.length; i++) {
+        ogData.push({ name: og[i].attributes.property.nodeValue, content: og[i].attributes.content.nodeValue });
+      }
+      this.setState({ ogData });
+      const metaDataOb = [];
+      const meta = doc.getElementsByTagName('meta');
+      let j = 0;
+      for (j = 0; j < meta.length; j++) {
+        if (meta.item(j).name !== '') {
+          metaDataOb.push({ name: meta.item(j).name, content: meta.item(j).content });
+        }
+      }
+      this.setState({ metaData: metaDataOb });
+      if (rssFeeds.length > 0) {
+        let n = 0;
+        const rssFeedData = [];
+        for (n = 0; n < rssFeeds.length; n++) {
+          const rssUrl = rssFeeds[n].getAttribute('href');
+          const rssTitle = rssFeeds[n].getAttribute('title');
+          const tempObj = {
+            url: rssUrl,
+            title: rssTitle
+          };
+          rssFeedData.push(tempObj);
+        }
+        this.setState({ rssFeed: rssFeedData });
+      }
+      this.generateJSON(doc);
+      this.setState({ fetchingContents: false });
+      const self = this;
+      let baseUrl = this.state.url.split('/');
+      let readMoreurl = `${baseUrl[2]}`;
+      readMoreurl = readMoreurl.replace('www.', '');
+      const readMore = `<br><a target="_blank" href=${this.state.cleanUrl}>Read on ${readMoreurl}</a>`;
+      if (desc && selectedContent === '') {
+        desc += '<br>';
+        desc += readMore;
+        this.setState({
+          summary: desc
+        });
+      } else {
+        if (selectedContent !== '') {
+          selectedContent += '<br>';
+          selectedContent += readMore;
+        }
+        this.setState({ summary: selectedContent });
+      }
+      if (title) {
+        let titleValue = title.split('--');
+        titleValue = titleValue[0].split(/[»|]/);
+        titleValue = titleValue[0];
+        let restTitle = titleValue.substring(0, titleValue.lastIndexOf('-') + 1);
+        let lastTitle = titleValue.substring(titleValue.lastIndexOf('-') + 1, titleValue.length);
+        // To handle this special character,it's not a '-'
+        if (titleValue.includes('–')) {
+          restTitle = titleValue.substring(0, titleValue.lastIndexOf('–') + 1);
+          restTitle = restTitle.replace('–', '');
+          lastTitle = titleValue.substring(titleValue.lastIndexOf('–') + 1, titleValue.length);
+        }
+        if (siteName) {
+          if ((lastTitle.toLowerCase()).trim() === (siteName.toLowerCase()).trim()) {
+            titleValue = restTitle.replace('-', '');
+            titleValue = titleValue.trim();
+          }
+        }
+        this.setState({ title: titleValue });
+      }
+      const allImages = doc.getElementsByTagName('img');
+
+      if (image) {
+        let ogImage = image.getAttribute('content');
+        if (!this.state.pattern.test(ogImage)) {
+          baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
+          ogImage = baseUrl + ogImage;
+        }
+        urlExists(ogImage, (err, exists) => {
+          if (exists) {
+            this.setState({ image: ogImage });
+          }
+          this.setAllImages(allImages);
+        });
+      } else {
+        this.setAllImages(allImages);
+      }
+      if (favicon) {
+        if (favicon.startsWith('//')) {
+          favicon = baseUrl[0] + favicon;
+        } else if (!this.state.pattern.test(favicon)) {
+          baseUrl = `${baseUrl[0]}//${baseUrl[2]}`;
+          favicon = baseUrl + favicon;
+        }
+        urlExists(favicon, (err, exists) => {
+          if (exists) {
+            self.setState({ favIcon: favicon });
+          }
+        });
+      }
+      this.setState({
+        doc
+      });
+    } else {
+      this.setState({ fetchingContents: false });
+    }
+  });
   log = (text, data) => new Promise((resolve) => {
-    console.log('===========================================================================================================');
-    console.log(text, JSON.stringify(data));
+    // console.log('===========================================================================================================');
+    // console.log(text, JSON.stringify(data));
   });
   checkURL(url) {
     return (url.match(/\.(jpeg|jpg|gif|png)$/) != null);
@@ -351,7 +372,19 @@ export default class Customform extends Component {
       }
     }
     for (let i = 0; i < images.length; i++) {
-      const img = images[i].src;
+      let img = images[i].src;
+      if (img.includes('?')) {
+        img = img.substring(0, img.indexOf('?'));
+      }
+      if (img.includes('chrome-extension://')) {
+        img = img.replace('chrome-extension://', '');
+        img = img.substring(img.indexOf('/') + 1);
+        let domainName = this.state.url.split('/');
+        const protocol = domainName[0];
+        const host = domainName[2];
+        domainName = protocol + '//' + host;
+        img = domainName + '/' + img;
+      }
       const res = img.match(/ajax|email|icon|FB|social|facebook/gi);
       if ((res == null) && (srcList.indexOf(img) === -1)) {
         const validUrl = this.checkURL(img);
@@ -362,15 +395,11 @@ export default class Customform extends Component {
     }
     this.setState({ allImages: srcList });
   }
-  loadDoc = () => new Promise( async (resolve) => {
-      var doc = document.implementation.createHTMLDocument("New Document");
-      doc.head.innerHTML = this.state.tabHead;
-      let bdy = this.state.tabBody;
-      var noScript = bdy.replace(/script/g, "THISISNOTASCRIPTREALLY");
-      doc.body.innerHTML = noScript;
-      if(this.state.tabBody && noScript){
-        resolve(doc);
-      }
+  loadDoc = () => new Promise(async (resolve) => {
+    const str = '<html>' + this.state.tabHead + this.state.tabBody + '</html>';
+    let doc = '';
+    doc = new DOMParser().parseFromString(str, "text/html");
+    resolve(doc);
   });
   getAlldomains() {
     const instancesKeys = Object.keys(Insatance.default);
@@ -435,15 +464,52 @@ export default class Customform extends Component {
   handleChange(event) {
     this.setState({ title: event.target.value });
   }
-
+  handleEventStartDateChange = date => {
+    this.setState({
+      eventStartDate: date
+    });
+  };
+  handleEventEndDateChange = date => {
+    this.setState({
+      eventEndDate: date
+    });
+  };
   handleUrl(event) {
     this.setState({ cleanUrl: event.target.value });
   }
+  handleEventLocation(event) {
+    this.setState({ EventLocation: event.target.value });
+  }
 
   async handleTypeChange(event) {
+    const eventTypeList = this.state.configdata.DateRequiredTypes;
+    let isEvent = false;
+    if (eventTypeList) {
+      eventTypeList.map((str) => {
+        if (str == event.target.value) {
+          isEvent = true;
+        }
+      });
+    }
+    if (isEvent) {
+      this.setState({
+        isEventType: true,
+        showEdit: false,
+        showOptionsTab: true
+      });
+    } else {
+      this.setState({
+        isEventType: false,
+        showOptionsTab: false
+      });
+    }
+    if (eventTypeList && eventTypeList.indexOf(event.target.value) !== -1) {
+      this.state.isEventType = true;
+    }
     const selected = event.target.value;
     await this.setState({ contentTypeSelected: selected });
     await this.setState({ SelectedInstance: selected });
+    this.checkeventSchema();
   }
   handleSummary(event) {
     this.setState({ summary: event.target.value });
@@ -534,14 +600,16 @@ export default class Customform extends Component {
 
   handleSubmit(event) {
     event.preventDefault();
+    let valid = true;
     this.setState({ loader: true });
-    const params = JSON.stringify({
+    let param = {
       subject: this.state.title,
       description: {
         format: 'markdown',
         raw: this.state.summary,
         html: ''
       },
+
       [this.state.configdata.customFields.sourceUrlField]: this.state.url,
       [this.state.configdata.customFields.cleanUrlField]: this.state.cleanUrl,
       _links: {
@@ -550,58 +618,104 @@ export default class Customform extends Component {
           title: 'Post'
         },
       }
-    });
-    const data = {
-      method: 'POST',
-      body: params,
-      credentials: 'include',
-      headers: {
-        // Authorization: 'Basic ' + btoa('apikey:' + this.state.apiKey),
-        'X-Requested-With': 'XMLHttpRequest',
-        'Content-Type': 'application/json;charset=UTF-8',
-      }
     };
-    fetch(`${this.state.apiUrl}/projects/${this.state.SelectedProject}/work_packages/`, data)
-      .then((response) => {
-        if (response.status === 201) {
-          // this.setState({ message: 'Saved Successfully.' });
-        }
-        return response.json();
-      }).then((catdata) => {
-        const webPackageId = catdata.id;
-        this.setState({ taskId: webPackageId });
-        if (this.state.isPdf == true) {
-          this.toDataUrlPdf(this.state.url, (myBase64) => {
-            const fileName = 'Curated_Featured_Image.pdf';
-            this.uploadPdf(webPackageId, fileName, myBase64);
+    if (this.state.isEventType) {
+
+      const locationFieldName = this.state.configdata.customFields.locationUrlField;
+      param.startDate = this.state.eventStartDate;
+      param.dueDate = this.state.eventEndDate;
+      param.startDate = moment(param.startDate).format('YYYY-MM-DD');
+      param.dueDate = moment(param.dueDate).format('YYYY-MM-DD');
+      param[locationFieldName] = this.state.EventLocation;
+      if (param.startDate === 'Invalid date' || Number(param[locationFieldName].length) < 1 || param.dueDate === 'Invalid date') {
+        valid = false;
+        this.setState({
+          invalidEvent: true,
+          showEdit: false,
+          showOptionsTab: true,
+          loader: false,
+          eventErrorMessage: 'Please enter event details'
+        });
+      } else {
+        if ((Date.parse(param.startDate) > Date.parse(param.dueDate))) {
+          valid = false;
+          this.setState({
+            invalidEvent: true,
+            showEdit: false,
+            showOptionsTab: true,
+            loader: false,
+            eventErrorMessage: 'End date should be greater than Start date'
+          });
+        } else {
+          this.setState({
+            invalidEvent: false,
+            showEdit: true,
+            showOptionsTab: false,
+            eventErrorMessage: ''
           });
         }
-        if (this.state.image) {
-          this.toDataUrl(this.state.image, (myBase64) => {
-            const fileName = 'Curated_Featured_Image.png';
-            this.uploadImage(webPackageId, fileName, myBase64);
+      }
+    }
+    if (valid) {
+      const params = JSON.stringify(param);
+      const data = {
+        method: 'POST',
+        body: params,
+        credentials: 'include',
+        headers: {
+          // Authorization: 'Basic ' + btoa('apikey:' + this.state.apiKey),
+          'X-Requested-With': 'XMLHttpRequest',
+          'Content-Type': 'application/json;charset=UTF-8',
+        }
+      };
+      fetch(`${this.state.apiUrl}/projects/${this.state.SelectedProject}/work_packages/`, data)
+        .then((response) => {
+          if (response.status === 201) {
+            // this.setState({ message: 'Saved Successfully.' });
+          }
+          return response.json();
+        }).then((catdata) => {
+          const webPackageId = catdata.id;
+          this.setState({ taskId: webPackageId });
+          if (this.state.isPdf == true) {
+            this.toDataUrlPdf(this.state.url, (myBase64) => {
+              const fileName = 'Curated_Featured_Image.pdf';
+              this.uploadPdf(webPackageId, fileName, myBase64);
+            });
+          }
+          if (this.state.image) {
+            this.toDataUrl(this.state.image, (myBase64) => {
+              const fileExtension = (this.state.image).replace(/^.*\./, '');
+              let fileName = '';
+              if (fileExtension) {
+                fileName = 'Curated_Featured_Image.' + fileExtension.replace(/\?.+/, '');
+              } else {
+                fileName = 'Curated_Featured_Image.png';
+              }
+              this.uploadImage(webPackageId, fileName, myBase64);
+              if (this.state.parentId) {
+                this.createRelation(webPackageId);
+              }
+            });
+          } else {
+            this.uploadOgData(webPackageId);
             if (this.state.parentId) {
               this.createRelation(webPackageId);
             }
-          });
-        } else {
-          this.uploadOgData(webPackageId);
-          if (this.state.parentId) {
-            this.createRelation(webPackageId);
           }
-        }
-        if (this.state.favIcon) {
-          this.toDataUrl(this.state.favIcon, (base64Content) => {
-            const curatedFileName = 'Curated_Source_FavIcon.png';
-            this.uploadImage(webPackageId, curatedFileName, base64Content);
-          });
-        }
-        // this.setState({ siteUrl: this.state.siteUrl });
-        this.setState({ message: `Saved in ${this.state.domain} as` });
-        this.setState({ loader: false });
-      });
-  }
+          if (this.state.favIcon) {
+            this.toDataUrl(this.state.favIcon, (base64Content) => {
+              const curatedFileName = 'Curated_Source_FavIcon.png';
+              this.uploadImage(webPackageId, curatedFileName, base64Content);
+            });
+          }
+          // this.setState({ siteUrl: this.state.siteUrl });
+          this.setState({ message: `Saved in ${this.state.domain} as` });
+          this.setState({ loader: false });
+        });
+    }
 
+  }
   createRelation(webPackageId) {
     const params = JSON.stringify({
       _links:
@@ -725,7 +839,7 @@ export default class Customform extends Component {
       return response.json();
     }).then((res) => {
       // same function used for fav icon.This checking is to avoid multiple uploads
-      if (fileName === 'Curated_Featured_Image.png') {
+      if (fileName.includes('Curated_Featured_Image')) {
         this.uploadOgData(id);
       }
     });
@@ -851,6 +965,7 @@ export default class Customform extends Component {
     let notificationTab = false;
     let jsonTreeTab = false;
     let showSettingsTab = false;
+    let optionsTab = false;
     if (this.state.contentTypeSelected) {
       if (String(event.target.id) === 'editTab') {
         editTab = true;
@@ -869,11 +984,39 @@ export default class Customform extends Component {
       } else if (String(event.target.id) === 'settingsTab') {
         showSettingsTab = true;
       }
-    } else if (String(event.target.id) === 'settingsTab') {
-      showSettingsTab = true;
-    } else {
-      editTab = true;
+      else if (String(event.target.id) === 'optionsTab') {
+        optionsTab = true;
+        this.checkeventSchema();
+      }
+
+    } else{
+       if (String(event.target.id) === 'settingsTab') {
+        showSettingsTab = true;
+        this.setState({currentActiveTab:'settingsTab'});
+      } 
+      else if (String(event.target.id) === 'jsonTree') {
+      jsonTreeTab = true;
+        this.setState({currentActiveTab:'jsonTree'});
+      } 
+      else if (String(event.target.id) === 'editTab') {
+        editTab = true;
+        this.setState({currentActiveTab:'editTab'});
+      }else{
+        if(this.state.currentActiveTab != ''){
+          if (this.state.currentActiveTab === 'settingsTab') {
+            showSettingsTab = true;
+          } 
+          else if (this.state.currentActiveTab === 'jsonTree') {
+          jsonTreeTab = true;
+          } 
+          else {
+            editTab = true;
+          }
+        }
+      }
+
     }
+    
     this.setState({
       showEdit: editTab,
       showShare: shareTab,
@@ -882,7 +1025,8 @@ export default class Customform extends Component {
       showMsgTab: msgTab,
       showNotificationTab: notificationTab,
       showJsonTree: jsonTreeTab,
-      showSettings: showSettingsTab
+      showSettings: showSettingsTab,
+      showOptionsTab: optionsTab
     });
   }
   getCookies(domain, name, callback) {
@@ -906,10 +1050,11 @@ export default class Customform extends Component {
       this.setState({ authenticate: true });
     }
     this.needToLogin = await this.ConfigLoader.needToLogin();
+
     return resp;
     // expected output: 'resolved'
   }
-  isPdfLink(url) {
+  async isPdfLink(url) {
     return new Promise(((resolve, reject) => {
       fetch(url).then((response) => {
         const contentType = response.headers.get('content-type');
@@ -1007,6 +1152,65 @@ export default class Customform extends Component {
       });
     }
   }
+  async checkeventSchema() {
+    await chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+      if (tabs) {
+
+        const tabUrl = tabs[0].url;
+        if (this.state.pattern.test(tabUrl)) {
+          chrome.tabs.executeScript({
+            code: 'JSON.parse(document.querySelector(\'script[type="application/ld+json"]\').innerText)'
+          }, (selection) => {
+            if (selection[0]) {
+              let eventInfo = [];
+              let contentType = '';
+              let flag = 0;
+              if (typeof (selection[0][0]) !== 'undefined' && flag === 0) {
+                if (typeof (selection[0][0]["@type"]) !== 'undefined') {
+                  eventInfo = selection[0][0];
+                  contentType = selection[0][0]["@type"];
+                  flag = 1;
+                }
+              } else if (typeof (selection[0]) !== 'undefined' && flag === 0) {
+                if (typeof (selection[0]["@type"]) !== 'undefined') {
+                  eventInfo = selection[0];
+                  contentType = selection[0]["@type"];
+                  flag = 1;
+                }
+              } if (flag === 0 && typeof (selection[0]["@graph"]) !== 'undefined') {
+                if (typeof (selection[0]["@graph"][0]["@type"]) !== 'undefined') {
+                  eventInfo = selection[0]["@graph"][0];
+                  contentType = selection[0]["@graph"][0]["@type"];
+                  flag = 1;
+                }
+              }
+
+              if ((contentType.toLowerCase()).includes('event')) {
+
+                if (typeof (eventInfo.startDate) != "undefined") {
+                  let startDate = new Date(eventInfo.startDate);
+                  this.setState({ eventStartDate: startDate });
+                }
+
+                if (typeof (eventInfo.endDate) != "undefined") {
+                  let endDate = new Date(eventInfo.endDate);
+                  this.setState({ eventEndDate: endDate });
+                }
+
+                if (typeof (eventInfo.location) != "undefined") {
+                  let location = eventInfo.location;
+                  if (location["@type"].toLowerCase() == "place") {
+                    this.setState({ EventLocation: location.name });
+                  }
+
+                }
+              }
+            }
+          });
+        }
+      }
+    });
+  }
 
   async recurProj(InstanceIndex, projects, level = 1, ar = []) {
     // this.log('project',projects);
@@ -1059,12 +1263,12 @@ export default class Customform extends Component {
                   {this.state.showEdit ?
                     <div id="panel-edit">
                       <form onSubmit={this.handleSubmit} id="homePageForm">
-                        <div className="ds-l-row ds-u-padding-top--1 ds-u-padding-left--0 ds-u-padding-right--0">
+                        <div className="ds-l-row ds-u-padding-top--1 ds-u-padding-left--0 ds-u-margin-right--0 l-og-title">
                           <div className="ds-l-col--12">
                             <textarea className={this.state.title ? [style.textareaTitle, 'preview__label ds-u-font-size--h4 ds-u-font-style--normal'].join(' ') : [style.titleError, 'ds-u-font-size--base ds-u-font-style--normal'].join(' ')} value={this.state.title} onChange={this.handleChange} placeholder="Title *" />
                           </div>
                         </div>
-                        <div className="ds-l-row">
+                        <div className="ds-l-row l-ck-editor">
                           <div className="ds-l-col--12 preview__label ds-u-font-size--small ds-u-font-style--normal">
                             <CKEditor
                               editor={ClassicEditor}
@@ -1082,7 +1286,7 @@ export default class Customform extends Component {
                             />
                           </div>
                         </div>
-                        <div className="ds-l-row ds-u-padding-right--1">
+                        <div className="ds-l-row ds-u-padding-right--1 l-feature-img">
                           <div className="ds-l-col--8">
                             <ul className={[style.readableContentUl, 'ds-c-list ds-u-padding-left--3 ds-u-margin--0'].join(' ')} aria-labelledby="unordered-list-id">
                               <li className="ds-u-margin--0"><a className="ds-u-color--muted" href="#" onClick={this.replaceWithReadableContent}>Replace with Readable Content</a></li>
@@ -1101,29 +1305,12 @@ export default class Customform extends Component {
                           </div>
                         </div>
                         <hr className="on ds-u-fill--gray-lightest" />
-                        <div className="ds-l-row ds-u-margin-left--0">
+                        <div className="ds-l-row ds-u-margin-left--0 l-clean-url">
                           <div className={[style.favIcon, 'ds-l-col--auto'].join(' ')}>{this.state.favIcon ? <img src={this.state.favIcon} width="18px" height="18px" alt="favIcon" /> : null}</div>
                           <div className={[style.cleanUrl, 'ds-l-col--10 ds-u-padding-x--0'].join(' ')}><input type="text" className={this.state.parentId ? [style.textareaLink, 'preview__label ds-u-font-style--normal ds-u-color--white on ds-u-fill--secondary-dark ds-u-padding-x--1'].join(' ') : [style.textareaLink, 'preview__label ds-u-font-style--normal'].join(' ')} value={this.state.cleanUrl} onChange={this.handleUrl} style={this.state.parentId ? { height: '20px' } : { height: '18px' }} /></div>
                         </div>
-                        <hr className="on ds-u-fill--gray-lightest" />
-                        <div className="ds-l-row">
-                            <label class="usa-label">Start Date</label>
-                            <fieldset class="usa-fieldset">
-                              <div class="usa-memorable-date">
-                                <div class="usa-form-group usa-form-group--month">
-                                  <input class="usa-input usa-input--inline" placeholder="MM" aria-describedby="dobHint" id="date_of_birth_1" name="date_of_birth_1" type="number" min="1" max="12" value=""/>
-                                </div>
-                                <div class="usa-form-group usa-form-group--day">
-                                  <input class="usa-input usa-input--inline" placeholder="DD" aria-describedby="dobHint" id="date_of_birth_2" name="date_of_birth_2" type="number" min="1" max="31" value=""/>
-                                </div>
-                                <div class="usa-form-group usa-form-group--year">
-                                  <input class="usa-input usa-input--inline"placeholder="YYYY"  aria-describedby="dobHint" id="date_of_birth_3" name="date_of_birth_3" type="number" min="1900" max="2019" value=""/>
-                                </div>
-                              </div>
-                            </fieldset>
-                        </div>
                         <hr className="on ds-u-fill--gray-lightest ds-u-margin-bottom--0" />
-                        <div className="ds-l-row">
+                        <div className="ds-l-row l-open-project l-select-project">
                           <div className="ds-l-col--6">
                             <select className={this.state.projectSelected ? 'ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-border--1 ds-u-margin-bottom--0 ds-u-padding-left--2' : [style.titleError, 'ds-c-field ds-u-font-size--small ds-u-font-style--normal ds-u-margin-bottom--0 ds-u-padding-left--2'].join(' ')} value={this.state.projectSelected} onChange={this.handleProjectChange} style={{ minWidth: '237px' }}>
                               <option value="">In</option>
@@ -1148,7 +1335,7 @@ export default class Customform extends Component {
                             <span className="ds-c-spinner ds-c-spinner--small ds-c-spinner--inverse" aria-valuetext="Saving" role="progressbar" /> Loading
                         </button> : null}
                           {this.state.message === '' && this.state.loader === false ?
-                            <div className="ds-l-row">
+                            <div className="ds-l-row l-submit-form">
                               <div className="ds-l-col--auto">
                                 <input disabled={!this.state.title || !this.state.contentTypeSelected} type="submit" value="Post to Lectio" className="ds-u-margin-left--1 ds-u-margin-top--1 ds-c-button ds-c-button--primary" /></div>
                               <div className="ds-l-col--auto">
@@ -1166,6 +1353,63 @@ export default class Customform extends Component {
                     : null}
                   {this.state.showJsonTree ? <div id="panel-meta">
                     <ExtractedContent jsonData={this.state.metaDataJSON} rssFeed={this.state.rssFeed} articleTitle={this.state.readabilityTitle} articleExcerpt={this.state.readabilityExcerpt} articleByline={this.state.readabilityByline} articleData={this.state.domContents} onContentChange={this.contentChange} />
+                  </div> : null}
+                  {this.state.showOptionsTab ? <div id="panel-optionTab">
+                    {this.state.isEventType ?
+                      <div className="usa-accordion site-accordion-code">
+                        <h4 className="usa-accordion__heading site-accordion-code">
+                          <button
+                            className="usa-accordion__button"
+                            aria-expanded="true"
+                            aria-controls="eventDetails"
+                          >Event Details
+                          </button>
+                        </h4>
+
+                        <div id="eventDetails" className="usa-accordion__content usa-prose">
+
+                          <div className="ds-l-row ds-u-padding-left--1">
+                            <div className="ds-l-col--3">
+                              <label class="preview__label ds-u-font-style--normal ds-u-font-size--small">Start Date*</label>
+                            </div>
+                            <div className="ds-l-col--9">
+                              <DatePicker
+                                selected={this.state.eventStartDate}
+                                onChange={this.handleEventStartDateChange}
+                              />
+                            </div>
+                          </div>
+                          <div className="ds-l-row ds-u-padding-left--1 ds-u-padding-top--1">
+                            <div className="ds-l-col--3">
+                              <label class="preview__label ds-u-font-style--normal ds-u-font-size--small">End Date*</label>
+                            </div>
+                            <div className="ds-l-col--9">
+                              <DatePicker
+                                selected={this.state.eventEndDate}
+                                onChange={this.handleEventEndDateChange}
+                              />
+                            </div>
+                          </div>
+                          <hr className="on ds-u-fill--gray-lightest ds-u-margin-bottom--0" />
+                          <div className="ds-l-row ds-u-padding-left--1 ds-u-padding-top--1">
+                            <div className="ds-l-col--3">
+                              <label class="preview__label ds-u-font-style--normal ds-u-font-size--small ds-u-padding-top--1">Location*</label>
+                            </div>
+                            <div className="ds-l-col-9">
+                              <div class="usa-form-group usa-form-group--month ds-u-padding-left--2">
+                                <input type="text" className={[style.eventLocation, 'preview__label ds-u-font-style--normal'].join(' ')} value={this.state.EventLocation} name="event_location" onChange={this.handleEventLocation} />
+                              </div>
+                            </div>
+                          </div>
+                          {this.state.invalidEvent ? <div className="ds-l-row ds-u-padding-left--1 ds-u-padding-top--1">
+                            <div className="ds-l-col--12  ds-u-text-align--center ">
+                              <label class="ds-u-padding-top--1 ds-h5 ds-u-color--error">{this.state.eventErrorMessage}</label>
+                            </div>
+                          </div> : null}
+                        </div>
+                      </div> : null}
+
+
                   </div> : null}
                   {this.state.showShare ? <div id="panel-share">
                     <ShareContent configdata={this.state.configdata} domContents={this.state.domContents} metaData={this.state.metaData} onContentChange={this.shareDataChange} />
@@ -1214,7 +1458,10 @@ export default class Customform extends Component {
                         <a className={this.state.showEdit ? [style.editActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.editInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="editTab" />
                       </li>
                       <li className={this.state.showJsonTree ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
-                        <a className={this.state.showJsonTree ? [style.metaActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.metaInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="jsonTree" style={!this.state.contentTypeSelected ? { cursor: 'not-allowed', opacity: '0.2' } : null} />
+                        <a className={this.state.showJsonTree ? [style.metaActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.metaInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="jsonTree" />
+                      </li>
+                      <li className={this.state.showOptionsTab ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
+                        <a className={this.state.showOptionsTab ? [style.optionsActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.optionsInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="optionsTab" style={!this.state.contentTypeSelected ? { cursor: 'not-allowed', opacity: '0.2' } : null} />
                       </li>
                       <li className={this.state.showImgTab ? [style.verticalNavCustomActive, 'ds-c-vertical-nav__item'].join(' ') : 'ds-c-vertical-nav__item'} onClick={this.activateTabs}>
                         <a className={this.state.showImgTab ? [style.imgActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ') : [style.imgInActive, style.sidebarIcons, 'ds-c-vertical-nav__label ds-u-padding--0'].join(' ')} href="#" id="imgTab" style={!this.state.contentTypeSelected ? { cursor: 'not-allowed', opacity: '0.2' } : null} />

@@ -1,15 +1,39 @@
-#homePageForm .ck-editor__editable_inline {
-    min-height: 250px !important;
-    max-height: 250px !important;
+
+.ck-editor__editable{
+    height: calc(100vh - 380px);
+    overflow-y: scroll;
 }
+#panel-edit .l-og-title{
+    height: 60px !important;
+    overflow-y: scroll;
+}
+#panel-edit .ck-sticky-panel__content{
+    height: 38px !important;
+}
+#panel-edit .l-feature-img{
+    height: 110px !important;
+}
+#panel-edit .l-clean-url{
+    height: 30px!important;
+}
+#panel-edit .l-submit-form{
+    height: 40px !important;
+}
+#panel-edit .l-select-project{
+    height: 40px !important;
+} 
+#metaDataContent{
+    max-width: 499px !important;
+}
+
 #editableMetaContent .ck-editor__editable_inline {
     min-height: 400px !important;
     max-height: 400px !important;
     padding-bottom: 20px !important;
 }
-#feedbackForm .ck-editor__editable_inline {
-    min-height: 300px !important;
-    max-height: 300px !important;
+#feedBackContent {
+    min-height: calc(100vh - 104px) !important;
+    max-height: calc(100vh - 104px) !important;
 }
 #homePageForm .ck.ck-editor__main>.ck-editor__editable:not(.ck-focused){
     border-left:0px !important;
@@ -39,4 +63,9 @@
     color:#000!important;
     font-weight: 500!important;
     font-size: 16px!important;
+}
+@media (min-width: 544px){
+.ds-l-container {
+    padding-left: 16px !important;
+}
 }

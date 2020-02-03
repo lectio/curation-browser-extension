@@ -213,17 +213,15 @@ export default class Feedback extends React.Component {
             aria-controls="whatsNewContent"
           >What's New</button>
         </h4>
-        <div id="whatsNewContent" className="usa-accordion__content usa-prose ds-u-padding-left--1 ds-u-padding-top--0">
+        <div id="whatsNewContent" className="usa-accordion__content usa-prose ds-u-padding-left--1 ds-u-padding-top--0" hidden>
           <ul className="ds-c-list preview__label ds-u-font-size--base ds-u-font-style--normal">
-            <li>Release 3.4.1 October 28, 2019.</li>
+            <li>Release 3.6.0 January 22, 2020.</li>
             <ul>
-              <li>​​​​​Imporved.</li>
+              <li>Feature</li>
               <ul>
-                <li>Added assignee to feedback.</li>
-              </ul>
-              <li>Fixes</li>
-              <ul>
-                <li>Fixed the premission issue on Lectio Instance Feedback on Netspective Projets</li>
+                <li>Populated the event dates and location from the schema </li>
+                <li>The extension will be loaded on the right mouse click </li>
+                <li>The extension injected to every tab like a widget </li>
               </ul>
             </ul>
           </ul>

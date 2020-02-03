@@ -365,6 +365,12 @@
 .metaInActive{
   background-image: url('/img/metadata-inactive.png');
 }
+.optionsActive{
+  background-image: url('/img/options-active.png');
+}
+.optionsInActive{
+  background-image: url('/img/options-inactive.png');
+}
 .metaInActive:hover {
   background-image: url('/img/metadata-active.png');
 }
@@ -485,4 +491,9 @@
 }
 .InstanceOptGroup {
   color: #0a96f9;
+}
+.eventLocation{
+  padding-left: 7px;
+  height: 2.5rem;
+  min-width: 300px !important;
 }

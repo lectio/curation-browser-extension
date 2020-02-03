@@ -2,7 +2,7 @@
 import React from 'react';
 import INSTANCE from '../constants/config.json';
 import APIDATA from '../constants/apidata';
-
+import request from 'superagent';
 const yaml = require('js-yaml');
 
 export default class ConfigLoader extends React.Component {
@@ -14,18 +14,16 @@ export default class ConfigLoader extends React.Component {
       loading: false,
       configData: [],
       instanceData: [],
-      needToLogin : [],
+      needToLogin: [],
       instanceConfigProject: [],
-      configProject:[],
-      OtherProjects:[],
-      newinstanceConfigProject:[]
+      configProject: [],
+      OtherProjects: [],
+      newinstanceConfigProject: []
     };
     this.loadConfig = this.loadConfig.bind(this);
     this.checkLogedInstance = this.checkLogedInstance.bind(this);
     this.getInstanceConfigData = this.getInstanceConfigData.bind(this);
   }
-
-
   // eslint-disable-next-line react/sort-comp
   loadConfig = () => new Promise((resolve) => {
     this.checkLogedInstance().then(async (isLogedIn) => {
@@ -35,23 +33,14 @@ export default class ConfigLoader extends React.Component {
         await this.getInstances();
         const newInstance = await this.getInstanceConfigData();
         const getProjects = await this.getProjectsWithConfig(newInstance);
-        // const getConfigInstanceDat = await this.getConfigInstanceConfig(getProjects);
-        // await this.getInstanceConfig().then( (InstConfig) => {
-        //   this.log('InstConfig var' , InstConfig);
-        this.log('InstConfig', getProjects);
-        //   resolve(this.state.instanceConfigProject);
-        // });
         resolve(getProjects);
       } else {
         resolve(false);
       }
-      // this.log('InstConfig', this.state.instanceConfigProject);
     });
-    // const ConfigWorkPackages = await this.getConfigWorkPackageType();
   });
 
   log = (text, data) => new Promise(() => {
-    // console.log('===========================================================================================================');
     // console.log(text, JSON.stringify(data));
   });
   getCookies(domain, name, callback) {
@@ -69,24 +58,19 @@ export default class ConfigLoader extends React.Component {
 
   checkLogedInstance = () => new Promise((resolve) => {
     let i = 0;
-    // console.log('instLoopCountInitial:',i);
+
     Object.keys(INSTANCE).forEach(async (key) => {
-      // console.log('instLoopCountStart:',i);
       this.getCookies(INSTANCE[key].api.baseURL, '_open_project_session', (cookies) => {
         chrome.cookies.set({ url: INSTANCE[key].api.baseURL, name: '_open_project_session', value: cookies });
       });
-      fetch(`${INSTANCE[key].api.apiURL}/my_preferences/`, this.state.authdataGet)
+      fetch(`${INSTANCE[key].api.apiURL}/projects/`, this.state.authdataGet)
         .then(response => (response.json())).then((responseJson) => {
           i += 1;
-          // console.log('instanceurl', `${INSTANCE[key].api.apiURL}/my_preferences/`);
-          // console.log('response',responseJson);
-          if (typeof responseJson._links !== 'undefined') {
+          if (responseJson.total > 0 ) {
             this.setState({ configData: this.state.configData.push(INSTANCE[key]) });
           } else {
             this.setState({ needToLogin: this.state.needToLogin.push(INSTANCE[key]) });
           }
-          // console.log('instLoopCountEnd:',i);
-          // console.log('configData',this.state.configData);
           if (i === Object.keys(INSTANCE).length) {
             if (this.state.configData.length === 0) {
               resolve(false);
@@ -118,13 +102,11 @@ export default class ConfigLoader extends React.Component {
           configPackageId
         });
       });
-      // this.setState(instanceProjects => ({ instanceConfigProject: instanceProjects }));
       this.log('instanceProjects', instanceProjects);
-      // this.setState({ newinstanceConfigProject: 'Static value' });
 
       if (processCount === this.state.instanceConfigProject.length) {
         this.log('instanceConfigProject DATA', this.state.instanceProjects);
-        this.setState({instanceConfigProject: instanceProjects})
+        this.setState({ instanceConfigProject: instanceProjects })
         resolve(instanceProjects);
       }
       processCount += 1;
@@ -137,7 +119,7 @@ export default class ConfigLoader extends React.Component {
     let resp = [];
     const confDataTemp = [];
     let processCount = 1;
-    this.state.configData.forEach( async (instanceKey) => {
+    this.state.configData.forEach(async (instanceKey) => {
       let configProject = [];
       const OtherProjects = [];
       await this.getAllprojects(instanceKey.api.apiURL).then(async (projectList) => {
@@ -152,9 +134,6 @@ export default class ConfigLoader extends React.Component {
       });
       resp.push({ instanceUniqName: instanceKey.instanceUniqName, instanceKey, configProject, OtherProjects });
       this.setState({ instanceConfigProject: this.state.instanceConfigProject.push({ instanceUniqName: instanceKey.instanceUniqName, instanceKey, configProject, OtherProjects }) });
-      // this.log('tmpProj first', instanceKey);
-      // this.log('configProject', configProject);
-      // this.log('OtherProjects', OtherProjects);
       this.log('instanceConfigProject', this.state.instanceConfigProject);
 
       if (processCount === this.state.configData.length) {
@@ -177,18 +156,18 @@ export default class ConfigLoader extends React.Component {
       });
   });
   getProjectsWithConfig = instanceData => new Promise((resolve) => {
-    
+
     const instanceProjects = [];
     let processCount = 0;
     instanceData.forEach(async (instance) => {
       let activeProjects = [];
       let configData = [];
-      const project = await fetch(`${instance.instanceKey.api.apiURL}/queries/default?filters=${encodeURIComponent(`[{"type":{"operator":"=","values":["${instance.configPackageId.id}"]}}]`)}`, this.state.authdataGet)
+      const project = await fetch(`${instance.instanceKey.api.apiURL}/queries/default?page=1&pageSize=500&filters=${encodeURIComponent(`[{"type":{"operator":"=","values":["${instance.configPackageId.id}"]}}]`)}`, this.state.authdataGet)
         .then((response) => {
-          return (response.json()); 
+          return (response.json());
         })
         .then(async (response) => {
-          this.log('response NEw', response._embedded.results._embedded.elements);
+          this.log('response NEw', response);
           instance.OtherProjects.forEach(async (project) => {
             response._embedded.results._embedded.elements.forEach(async (respPackage) => {
               if (respPackage._links.project.href === project._links.self.href) {
@@ -196,7 +175,7 @@ export default class ConfigLoader extends React.Component {
                 activeProjects.push({ respPackage, project, contentType });
               }
 
-              if(respPackage._links.project.href == instance.configProject._links.self.href) {
+              if (respPackage._links.project.href == instance.configProject._links.self.href) {
                 configData = await this.getContentType(respPackage.description.raw);
               }
             });
@@ -211,7 +190,7 @@ export default class ConfigLoader extends React.Component {
         configPackageId: instance.configPackageId,
         activeProjects
       });
-      this.log('203 processCount', [processCount, instanceData.length ]);
+      this.log('203 processCount', [processCount, instanceData.length]);
       if (processCount >= instanceData.length) {
         resolve(instanceProjects);
       }
@@ -221,7 +200,7 @@ export default class ConfigLoader extends React.Component {
     const instanceProjects = [];
     let processCount = 1;
     instanceData.forEach(async (instance) => {
-     const activeProjects =  await this.getWorkPackages(instance.instanceKey.api.apiURL, instance.OtherProjects, instance.configPackageId.id);
+      const activeProjects = await this.getWorkPackages(instance.instanceKey.api.apiURL, instance.OtherProjects, instance.configPackageId.id);
       instanceProjects.push({
         instanceUniqName: instance.instanceUniqName,
         instanceKey: instance.instanceKey,
@@ -230,7 +209,7 @@ export default class ConfigLoader extends React.Component {
         configPackageId: instance.configPackageId,
         activeProjects
       });
-      this.log('processCount',processCount);
+      this.log('processCount', processCount);
       if (processCount === this.state.instanceConfigProject.length) {
         resolve(instanceProjects);
       }
@@ -242,9 +221,9 @@ export default class ConfigLoader extends React.Component {
     const instanceProjects = [];
     let processCount = 1;
     instanceData.forEach(async (instance) => {
-      this.log('234 processCount',[ processCount, instanceData.length ]);
+      this.log('234 processCount', [processCount, instanceData.length]);
       const configData = await this.getInstaceConfigData(instance.instanceKey.api.apiURL, instance.configProject, instance.configPackageId.id);
-      this.log('236 processCount',[ processCount, instanceData.length ]);
+      this.log('236 processCount', [processCount, instanceData.length]);
       instanceProjects.push({
         instanceUniqName: instance.instanceUniqName,
         instanceKey: instance.instanceKey,
@@ -253,20 +232,21 @@ export default class ConfigLoader extends React.Component {
         configPackageId: instance.configPackageId,
         activeProjects: instance.activeProjects
       });
-      this.log('243 processCount', [ processCount, instanceData.length ]);
+      this.log('243 processCount', [processCount, instanceData.length]);
       if (processCount >= this.state.instanceConfigProject.length) {
-        this.log('instanceProjects instance',  instanceProjects);
+        this.log('instanceProjects instance', instanceProjects);
         resolve(instanceProjects);
       }
       processCount += 1;
-      this.log('251 processCount', [ processCount, instanceData.length ]);
+      this.log('251 processCount', [processCount, instanceData.length]);
     });
   });
 
-  getInstaceConfigData = (baseURL, project, typeId) => new Promise(async (resolve) =>{
+  getInstaceConfigData = (baseURL, project, typeId) => new Promise(async (resolve) => {
     const res = await fetch(`${baseURL}/projects/${project.id}/work_packages?filters=${encodeURIComponent(`[{"type":{"operator":"=","values":["${typeId}"]}}]`)}`, this.state.authdataGet)
       .then((response) => {
-        return (response.json())})
+        return (response.json())
+      })
       .then(async (response) => {
         if (response.total > 0) {
           const content = await this.getContentType(response._embedded.elements[0].description.raw);
@@ -275,33 +255,33 @@ export default class ConfigLoader extends React.Component {
       });
   });
 
-  getWorkPackages = (baseURL, projects, typeId) => new Promise((resolve) =>{
+  getWorkPackages = (baseURL, projects, typeId) => new Promise((resolve) => {
     let processCount = 1;
     let activeProject = [];
     projects.forEach(async (project) => {
-      const res  = await fetch(`${baseURL}/projects/${project.id}/work_packages?filters=${encodeURIComponent(`[{"type":{"operator":"=","values":["${typeId}"]}}]`)}`, this.state.authdataGet)
-      .then((response) => {
-        return (response.json())})
+      const res = await fetch(`${baseURL}/projects/${project.id}/work_packages?filters=${encodeURIComponent(`[{"type":{"operator":"=","values":["${typeId}"]}}]`)}`, this.state.authdataGet)
+        .then((response) => {
+          return (response.json())
+        })
         .then(async (response) => {
-        // console.log('response',response);
-        if (response.total > 0) {
-          const contentType = await this.getContentType(response._embedded.elements[0].description.raw);
-          activeProject.push({response, project, contentType});
-        }
-        this.log('proicessCount work packaes',[processCount ,projects.length]);
-        if (processCount === projects.length) {
-          resolve(activeProject);
-        }
-        processCount += 1;
-      });
-      await this.log('FerchUrl',`${res}${baseURL}/projects/${project.id}/work_packages?filters=${encodeURIComponent(`[{"type":{"operator":"=","values":["${typeId}"]}}]`)}`);
+          // console.log('response',response);
+          if (response.total > 0) {
+            const contentType = await this.getContentType(response._embedded.elements[0].description.raw);
+            activeProject.push({ response, project, contentType });
+          }
+          this.log('proicessCount work packaes', [processCount, projects.length]);
+          if (processCount === projects.length) {
+            resolve(activeProject);
+          }
+          processCount += 1;
+        });
+      await this.log('FerchUrl', `${res}${baseURL}/projects/${project.id}/work_packages?filters=${encodeURIComponent(`[{"type":{"operator":"=","values":["${typeId}"]}}]`)}`);
     });
   });
 
   getAllWorkPackageType = (apiUrl, InstanceConfigProjectId) => new Promise((resolve) => {
     fetch(`${apiUrl}/projects/${InstanceConfigProjectId}/work_packages/form`, this.state.authdataPost)
       .then((response) => {
-        // this.setState({ packages: response.json()._embedded.schema.type._links.allowedValues });
         resolve(response.json());
       });
   });
@@ -319,26 +299,10 @@ export default class ConfigLoader extends React.Component {
       await callback(array[index], index, array);
     }
   }
-
-  // returnConfigData = () => new Promise((resolve) => {
-  //   let inst = [];
-  //   this.state.configData.forEach(async (instanceKey) => {
-  //     const ar = { [instanceKey.instanceUniqName]: {
-  //       BaseUrl: instanceKey.api.baseURL,
-  //       ApiUrl: instanceKey.api.apiURL,
-  //     } };
-  //     console.log('arrr', instanceKey.instanceUniqName);
-  //     inst = await merge(inst, ar);
-  //     inst.length += 1;
-  //     await console.log(JSON.stringify(inst));
-  //   });
-  //   resolve(inst);
-  // });
-
   getContentType = rawData => new Promise((resolve) => {
-    this.log('raqData',rawData);
-    this.log(rawData.substr(11,rawData.length - 14));
-    yaml.safeLoadAll(decodeURIComponent(rawData.substr(11,rawData.length - 14)), (doc) => {
+    this.log('raqData', rawData);
+    this.log(rawData.substr(11, rawData.length - 14));
+    yaml.safeLoadAll(decodeURIComponent(rawData.substr(11, rawData.length - 14)), (doc) => {
       resolve(doc);
     });
   });

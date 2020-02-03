@@ -1,10 +1,14 @@
 const path = require('path');
 const webpack = require('webpack');
-const autoprefixer = require('autoprefixer');
+const TerserPlugin = require('terser-webpack-plugin');
 
 const customPath = path.join(__dirname, './customPublicPath');
 
 module.exports = {
+  mode: 'production',
+  performance: {
+    hints: false
+  },
   entry: {
     todoapp: [customPath, path.join(__dirname, '../chrome/extension/todoapp')],
     background: [customPath, path.join(__dirname, '../chrome/extension/background')],
@@ -18,12 +22,9 @@ module.exports = {
   plugins: [
     new webpack.optimize.OccurrenceOrderPlugin(),
     new webpack.IgnorePlugin(/[^/]+\/[\S]+.dev$/),
-    new webpack.optimize.UglifyJsPlugin({
-      comments: false,
-      compressor: {
-        warnings: false
-      }
-    }),
+    // new TerserPlugin({
+    //   test: /\.js(\?.*)?$/i,
+    // }),
     new webpack.DefinePlugin({
       'process.env': {
         NODE_ENV: JSON.stringify('production')
@@ -32,6 +33,13 @@ module.exports = {
   ],
   resolve: {
     extensions: ['*', '.js']
+  },
+  optimization: {
+    minimizer: [
+      (compiler) => {
+        new TerserPlugin({ test: /\.js(\?.*)?$/i, }).apply(compiler);
+      }
+    ],
   },
   module: {
     rules: [{
@@ -45,11 +53,11 @@ module.exports = {
       test: /\.css$/,
       use: [
         'style-loader',
-        'css-loader?modules&importLoaders=1&localIdentName=[name]__[local]___[hash:base64:5]',
+        'css-loader?modules&importLoaders=true',
         {
           loader: 'postcss-loader',
           options: {
-            plugins: () => [autoprefixer]
+            plugins: () => [require('autoprefixer')]
           }
         }
       ]
@@ -57,5 +65,11 @@ module.exports = {
       test: /\.(jpe?g|png|gif|woff|woff2|eot|ttf|svg)(\?[a-z0-9=.]+)?$/,
       loader: 'url-loader?limit=100000'
     }]
+  },
+  node: {
+    fs: 'empty',
+    net: 'empty',
+    tls: 'empty',
+    dns: 'empty'
   }
 };

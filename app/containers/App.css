@@ -8,9 +8,14 @@
   background: #ffffff;
   border: 1px solid #ddd;
   padding-bottom: 0px;
-  height: 599px;
+  min-height: 599px;
+  min-width: 500px;
+  height: 100vh!important;
   overflow: hidden;
 }
+/* .lectio-extension-inject .normal{
+  height: 100vh!important;
+} */
 .normal:after, .normal:before {
 	bottom: 100%;
 	left: 80%;

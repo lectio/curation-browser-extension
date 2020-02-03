@@ -18,24 +18,24 @@ function popWindow(type) {
     height: 475,
   };
   if (type === 'open') {
-    options.url = 'window.html';
-    chrome.windows.create(options, (win) => {
-      windowId = win.id;
+    // options.url = 'popup.html';
+    // chrome.windows.create(options, (win) => {
+    //   windowId = win.id;
+    // });
+    chrome.tabs.executeScriptAsync({
+      code: `document.getElementById("lectio-extension-enable").click();`
     });
   }
 }
 
 chrome.contextMenus.create({
   id: CONTEXT_MENU_ID,
-  title: 'React Chrome Extension Example',
+  title: 'Curate',
   contexts: ['all'],
-  documentUrlPatterns: [
-    'https://github.com/*'
-  ]
 });
 
 chrome.contextMenus.onClicked.addListener((event) => {
   if (event.menuItemId === CONTEXT_MENU_ID) {
-    popWindow('open');
+    popWindow('open');    
   }
 });
